@@ -1,12 +1,103 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
-  output   = "../../generated/prisma"
 }
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model Team {
+  id            String   @id @default(cuid())
+  name          String   @unique  // "San Francisco 49ers"
+  abbreviation  String @unique  // "SF"
+  createdAt     DateTime @default(now())
+
+  players       Player[]
+  homeGames     Game[] @relation("HomeTeam")
+  awayGames     Game[] @relation("AwayTeam")
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String   // "Christian McCaffrey"
+  position  String   // "RB", "WR", "QB", etc.
+  teamId    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  team      Team     @relation(fields: [teamId], references: [id])
+  props     PlayerProp[]
+
+  @@unique([name, teamId])  // Same name can exist on different teams
+  @@index([name])
+}
+
+model Game {
+  id            String   @id @default(cuid())
+  externalId    String?  @unique  // ID from odds API
+  homeTeamId    String
+  awayTeamId    String
+  kickoffTime   DateTime
+  completed     Boolean  @default(false)
+  homeScore     Int?
+  awayScore     Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  homeTeam      Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam      Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  playerProps   PlayerProp[]
+
+  @@index([kickoffTime])
+}
+
+model Sportsbook {
+  id        String   @id @default(cuid())
+  name      String   @unique  // "DraftKings", "FanDuel"
+  key       String   @unique  // "draftkings", "fanduel" (API identifier)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  propOdds  PropOdds[]
+}
+
+model PlayerProp {
+  id            String   @id @default(cuid())
+  gameId        String
+  playerId      String
+  propType      String   // "rushing_yds", "receiving_yds", "pass_yds", "pass_tds", etc.
+  line          Float    // The over/under number (e.g., 85.5 receiving yards)
+  createdAt     DateTime @default(now())
+
+  game          Game       @relation(fields: [gameId], references: [id])
+  player        Player     @relation(fields: [playerId], references: [id])
+  propOdds      PropOdds[]
+
+  @@unique([gameId, playerId, propType, line])  // One prop per game/player/type/line combo
+  @@index([gameId])
+  @@index([playerId])
+}
+
+model PropOdds {
+  id            String   @id @default(cuid())
+  propId        String
+  sportsbookId  String
+  overOdds      Int      // American odds for OVER (e.g., -110)
+  underOdds     Int      // American odds for UNDER (e.g., -110)
+  fetchedAt     DateTime @default(now())
+
+  prop          PlayerProp @relation(fields: [propId], references: [id])
+  sportsbook    Sportsbook @relation(fields: [sportsbookId], references: [id])
+
+  @@index([propId, sportsbookId, fetchedAt])
+}
+
+// Optional: Track actual results for props
+model PropResult {
+  id            String   @id @default(cuid())
+  propId        String   @unique
+  actualValue   Float    // Actual yards/TDs the player achieved
+  hit           Boolean  // Did it go over the line?
+  recordedAt    DateTime @default(now())
 }

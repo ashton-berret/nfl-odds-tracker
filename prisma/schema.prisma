@@ -74,6 +74,7 @@ model Sportsbook {
   createdAt DateTime @default(now())
 
   propOdds  PropOdds[]
+  bets      Bet[]
 }
 
 model PlayerProp {
@@ -87,6 +88,7 @@ model PlayerProp {
   game          Game       @relation(fields: [gameId], references: [id])
   player        Player     @relation(fields: [playerId], references: [id])
   propOdds      PropOdds[]
+  bets          Bet[]
 
   @@unique([gameId, playerId, propType, line])  // One prop per game/player/type/line combo
   @@index([gameId])
@@ -114,4 +116,58 @@ model PropResult {
   actualValue   Float    // Actual yards/TDs the player achieved
   hit           Boolean  // Did it go over the line?
   recordedAt    DateTime @default(now())
+}
+
+
+
+// user and auth
+model User {
+    id              String @id @default(cuid())
+    email           String @unique
+    username        String @unique
+    passwordHash    String // using bcrypt
+    balance         Float @default(1000) // start with 1k
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    bets            Bet[]
+    sessions        Session[]
+}
+
+model Session {
+    id              String @id @default(cuid())
+    userId          String
+    expiresAt       DateTime
+    createdAt       DateTime @default(now())
+
+    user            User @relation(fields: [userId], references: [id], onDelete: Cascade) // delete all rows in children tables when parent row is deleted
+
+    @@index([userId])
+}
+
+model Bet {
+    id              String @id @default(cuid())
+    userId          String
+    propId          String
+    sportsbookId    String
+
+    // bet details
+    side            String // over or under
+    amount          Float
+    odds            Int
+
+    // settlement after game completes
+    status          String @default("pending")
+    profit          Float?
+
+    placedAt        DateTime @default(now())
+    settledAt       DateTime?
+
+    user            User @relation(fields: [userId], references: [id])
+    prop            PlayerProp @relation(fields: [propId], references: [id])
+    sportsbook      Sportsbook @relation(fields: [sportsbookId], references: [id])
+
+    @@index([userId])
+    @@index([propId])
+    @@index([status])
 }

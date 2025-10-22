@@ -96,3 +96,45 @@ export function extractPlayerProp(apiResponse: any, playerName: string, propType
         allOdds
     };
 }
+
+
+export function extractAllPlayerProps(apiResponse: any): ParsedPlayerProp[] {
+    console.log('[PARSER] Extracting all player props from game');
+
+    const allParsedProps: ParsedPlayerProp[] = [];
+    const seen = new Set<string>();
+
+    const bookmakers = apiResponse.bookmakers;
+
+    for (const bookmaker of bookmakers) {
+        for (const market of bookmaker.markets) {
+            if (!market.key.startsWith("player_")) {
+                continue;
+            }
+
+            for (const outcome of market.outcomes) {
+                // only process over outcomes since both get processed in the function call
+                if (outcome.name !== "Over") {
+                    continue;
+                }
+
+                const playerName = outcome.description;
+                const propType = market.key;
+                const key = `${playerName}|${propType}`;
+
+                if (seen.has(key)) {
+                    continue;
+                }
+
+                const res = extractPlayerProp(apiResponse, playerName, propType);
+
+                if (res) {
+                    allParsedProps.push(res);
+                    seen.add(key);
+                }
+            }
+        }
+    }
+    console.log(`[PARSER] Extracted ${allParsedProps.length} unique player props`);
+    return allParsedProps;
+}

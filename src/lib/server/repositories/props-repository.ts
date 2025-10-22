@@ -51,23 +51,28 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
             try {
                 console.log(`[PROPS REPO] Processing ${prop.playerName} - ${prop.propType}`);
 
-                // need to map players to team - probably implement a roster database or just use API if free
-                // for now we just assign everyone to home team
-                let playerTeamId = homeTeamRecord.id;
+                const playerInfo = await findPlayerInfo(prop.playerName, homeTeamRecord, awayTeamRecord);
 
+                if (!playerInfo) {
+                    console.log(`[PROPS REPO] Skipping ${prop.playerName} - not on either team`);
+                    continue;
+                }
                 // create or update the player -> use a compound unique key of name + team
                 const playerRecord = await prisma.player.upsert({
                     where: {
                         name_teamId: {
                             name: prop.playerName,
-                            teamId: playerTeamId
+                            teamId: playerInfo.teamId
                         }
                     },
-                    update: {active: true}, // if player exists set them to active
+                    update: {
+                        active: true,
+                        position: playerInfo.position
+                    }, // if player exists set them to active
                     create: {
                         name: prop.playerName,
-                        position: 'UNKNOWN', // have to get from alt api
-                        teamId: playerTeamId,
+                        position: playerInfo.position,
+                        teamId: playerInfo.teamId,
                         active: true
                     }
                 });
@@ -145,4 +150,45 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
     } catch (error) {
         console.error('[PROPS REPO] Failed to save props', error);
     }
+}
+
+/**
+ * helper to find which team a player is on
+ */
+async function findPlayerInfo(playerName: string, homeTeam: { id: string; name: string }, awayTeam: { id: string; name: string }): Promise<{ teamId: string; position: string } | null> {
+    console.log(`[PropsRepo] Looking up team for: ${playerName}`);
+
+    const mapping = await prisma.playerTeamMapping.findFirst({
+        where: {
+            playerName: playerName,
+            active: true
+        }
+    });
+
+    if (!mapping) {
+        console.log(`[PropsRepo] ${playerName} not found in roster database`);
+        return null;
+      }
+
+    // Check if player's team matches home team
+    if (mapping.teamName === homeTeam.name) {
+        console.log(`[PropsRepo]   ✓ Found on home team: ${homeTeam.name}`);
+        return {
+          teamId: homeTeam.id,  // Return immediately with teamId
+          position: mapping.position || 'UNKNOWN'
+        };
+    }
+
+      // Check if player's team matches away team
+    if (mapping.teamName === awayTeam.name) {
+        console.log(`[PropsRepo]   ✓ Found on away team: ${awayTeam.name}`);
+        return {
+          teamId: awayTeam.id,  // Return immediately with teamId
+          position: mapping.position || 'UNKNOWN'
+        };
+      }
+
+      // Player is on a different team (not in this game)
+      console.log(`[PropsRepo]${playerName} is on ${mapping.teamName}, not playing in this game`);
+      return null;
 }

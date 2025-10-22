@@ -33,6 +33,20 @@ model Player {
   @@index([name])
 }
 
+model PlayerTeamMapping {
+    id              String @id @default(cuid())
+    playerName      String
+    teamName        String
+    position        String?
+    jerseyNumber    String?
+    active          Boolean @default(true)
+    lastUpdated     DateTime @default(now()) @updatedAt
+
+    @@unique([playerName, teamName])
+    @@index([playerName])
+    @@index([teamName])
+}
+
 model Game {
   id            String   @id @default(cuid())
   externalId    String?  @unique  // ID from odds API

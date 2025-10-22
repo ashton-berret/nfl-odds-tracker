@@ -23,7 +23,7 @@ CREATE TABLE "Game" (
     "externalId" TEXT,
     "homeTeamId" TEXT NOT NULL,
     "awayTeamId" TEXT NOT NULL,
-    "kickoffTime" DATETIME NOT NULL,
+    "commenceTime" DATETIME NOT NULL,
     "completed" BOOLEAN NOT NULL DEFAULT false,
     "homeScore" INTEGER,
     "awayScore" INTEGER,
@@ -91,7 +91,7 @@ CREATE UNIQUE INDEX "Player_name_teamId_key" ON "Player"("name", "teamId");
 CREATE UNIQUE INDEX "Game_externalId_key" ON "Game"("externalId");
 
 -- CreateIndex
-CREATE INDEX "Game_kickoffTime_idx" ON "Game"("kickoffTime");
+CREATE INDEX "Game_commenceTime_idx" ON "Game"("commenceTime");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Sportsbook_name_key" ON "Sportsbook"("name");

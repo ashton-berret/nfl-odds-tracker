@@ -1,11 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { OddsFetcher } from '$lib/server/api/odds-fetcher';
 import { extractAllPlayerProps } from '$lib/server/api/props-parser';
+import { savePlayerProps } from '$lib/server/repositories/props-repository';
 import { ODDS_API_KEY } from '$env/static/private'
 
 
 export async function GET() {
-    console.log(`[API TESTING] Testing fetching and parsing results from API endpoint`)
+    console.log(`[API TESTING] Testing fetching and parsing real NFL Props`);
     try {
         const fetcher = new OddsFetcher(ODDS_API_KEY);
         console.log('[API TESTING] API Key loaded:', ODDS_API_KEY ? `${ODDS_API_KEY.substring(0, 10)}...` : 'UNDEFINED')
@@ -26,6 +27,15 @@ export async function GET() {
         const parsedProps = extractAllPlayerProps(propsData);
 
         console.log(`[API TESTING] Parsed ${parsedProps.length} player props.`);
+
+        await savePlayerProps(
+            games[0].id,
+            games[0].home_team,
+            games[0].away_team,
+            games[0].commence_time,
+            parsedProps
+        );
+        console.log('[DATABASE] Saved to database');
 
         return json({
             success: true,

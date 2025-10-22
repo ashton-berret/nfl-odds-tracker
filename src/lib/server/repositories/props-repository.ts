@@ -101,9 +101,12 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
                  *  { sportsbook: 'name', overOdds: num, underOdds: num}
                         * ]
                     */
+                console.log(`[PropsRepo]   Prop has ${prop.allOdds.length} sportsbooks with odds`);
+                console.log(`[PropsRepo]   allOdds data:`, JSON.stringify(prop.allOdds, null, 2));
 
-                for (const oddsData of props.allOdds) {
+                for (const oddsData of prop.allOdds) {
                     try {
+                        console.log(`[PropsRepo] Attempting to save odds from ${oddsData.sportsbook}`);
                         // find or create the sportsbook first using the sportsbook database id to link the odds to it
                         const sportsbookRecord = await prisma.sportsbook.upsert({
                             where: {

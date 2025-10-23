@@ -21,7 +21,7 @@ export async function POST({ request, cookies }) {
             }, { status: 400 });
         }
 
-        const user = await prisma.findFirst({
+        const user = await prisma.user.findFirst({
             where: {
                 OR: [
                     { email: emailOrUsername },

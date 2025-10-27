@@ -144,7 +144,7 @@ export class OddsFetcher {
 
     }
 
-    async fetchAllPlayerProps(markets: string[] = ['player_rush_yds', 'player_reception_yds', 'player_pass_yds', 'player_pass_tds', 'player_receptions', 'player_reception_tds', 'player_rush_tds', 'player_anytime_td']): Promise<OddsAPIEventOdds[]> {
+    async fetchAllPlayerProps(markets: string[] = ['player_rush_yds', 'player_rec_yds', 'player_pass_yds']): Promise<OddsAPIEventOdds[]> {
         console.log(`[OddsFetcher] Starting full fetch...`);
 
         // first get full list of games

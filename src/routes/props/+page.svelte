@@ -1,5 +1,11 @@
 <script lang="ts">
-    export let data;
+    import type { Prop } from '$lib/types';
+
+    export let data: {
+        props: Prop[];
+        count: number;
+        error?: string;
+    };
 
     // User comes from parent layout
     import { page } from '$app/stores';
@@ -27,33 +33,25 @@
 
     // Filtered props
     $: filteredProps = data.props.filter((prop: any) => {
-        // Search filter
         if (searchQuery && !prop.playerName.toLowerCase().includes(searchQuery.toLowerCase())) {
             return false;
         }
-
-        // Team filter
         if (selectedTeam !== 'all') {
             if (prop.game.homeTeam !== selectedTeam && prop.game.awayTeam !== selectedTeam) {
                 return false;
             }
         }
-
-        // Prop type filter
         if (selectedPropType !== 'all' && prop.propType !== selectedPropType) {
             return false;
         }
-
         return true;
     });
 
-    // Toggle expanded row
     function toggleExpand(propId: number) {
         console.log('[PROPS PAGE] Toggling expand for prop:', propId);
         expandedPropId = expandedPropId === propId ? null : propId;
     }
 
-    // Open bet slip
     function openBetSlip(prop: any, side: 'over' | 'under', sportsbook: any) {
         console.log('[PROPS PAGE] Opening bet slip:', { prop: prop.playerName, side, sportsbook: sportsbook.sportsbook });
 
@@ -69,7 +67,6 @@
         errorMessage = '';
     }
 
-    // Place bet
     async function placeBet() {
         if (!selectedProp || !selectedSportsbook || !user) return;
 
@@ -88,7 +85,6 @@
                 ? selectedSportsbook.overOdds
                 : selectedSportsbook.underOdds;
 
-            // Find sportsbook ID
             const sportsbookResponse = await fetch(`/api/sportsbooks?name=${encodeURIComponent(selectedSportsbook.sportsbook)}`);
             const sportsbookData = await sportsbookResponse.json();
 
@@ -125,7 +121,6 @@
         }
     }
 
-    // Helper functions
     function formatPropType(propType: string): string {
         return propType
             .replace('player_', '')
@@ -147,17 +142,17 @@
 </script>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-6">
-        <h1 class="text-3xl font-bold text-gray-900">NFL Player Props</h1>
-        <p class="text-gray-600 mt-1">Compare odds across sportsbooks and place your bets</p>
+    <div class="mb-8">
+        <h1 class="text-4xl font-bold text-slate-100 mb-2">NFL Player Props</h1>
+        <p class="text-slate-400 text-lg">Compare odds across sportsbooks and place your bets</p>
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 p-6 mb-6">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <!-- Search -->
             <div>
-                <label for="search" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="search" class="block text-sm font-semibold text-slate-300 mb-2">
                     Search Player
                 </label>
                 <input
@@ -165,19 +160,19 @@
                     type="text"
                     bind:value={searchQuery}
                     placeholder="e.g., Patrick Mahomes"
-                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-slate-500"
                 />
             </div>
 
             <!-- Team Filter -->
             <div>
-                <label for="team" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="team" class="block text-sm font-semibold text-slate-300 mb-2">
                     Team
                 </label>
                 <select
                     id="team"
                     bind:value={selectedTeam}
-                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                     {#each teams as team}
                         <option value={team}>
@@ -189,13 +184,13 @@
 
             <!-- Prop Type Filter -->
             <div>
-                <label for="propType" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="propType" class="block text-sm font-semibold text-slate-300 mb-2">
                     Prop Type
                 </label>
                 <select
                     id="propType"
                     bind:value={selectedPropType}
-                    class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                     {#each propTypes as type}
                         <option value={type}>
@@ -206,54 +201,56 @@
             </div>
         </div>
 
-        <div class="mt-4 text-sm text-gray-600">
+        <div class="mt-4 text-sm text-slate-400 font-medium">
             Showing {filteredProps.length} of {data.count} props
         </div>
     </div>
 
     <!-- Props Table -->
     {#if filteredProps.length === 0}
-        <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+        <div class="bg-warning/10 border border-warning/30 text-warning px-6 py-4 rounded-lg">
             {#if data.count === 0}
-                No props available. Visit <a href="/api/test-props" class="underline">/api/test-props</a> to fetch data.
+                No props available. Visit <a href="/api/test-props" class="underline font-semibold">fetch props endpoint</a> to load data.
             {:else}
                 No props match your filters. Try adjusting your search criteria.
             {/if}
         </div>
     {:else}
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden">
             <table class="min-w-full">
-                <thead class="bg-gray-100">
+                <thead class="bg-slate-900/50 border-b border-slate-700">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Player</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Game</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Prop</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Line</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Best Over</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Best Under</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Details</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider w-48">Player</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider w-60">Game</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider w-40">Prop</th>
+                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-24">Line</th>
+                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-32">Best Over</th>
+                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-32">Best Under</th>
+                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-28"></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200">
+                <tbody class="divide-y divide-slate-700/50">
                     {#each filteredProps as prop}
                         <!-- Main Row -->
-                        <tr class="hover:bg-gray-50">
+                        <tr class="hover:bg-slate-700/30 transition-colors">
                             <td class="px-6 py-4">
-                                <div class="font-medium text-gray-900">{prop.playerName}</div>
+                                <div class="font-semibold text-slate-100 text-lg">{prop.playerName}</div>
                             </td>
-                            <td class="px-6 py-4">
-                                <div class="text-sm">{prop.game.awayTeam} @ {prop.game.homeTeam}</div>
-                                <div class="text-xs text-gray-500">
+                            <td class="px-6 py-4 w-40">
+                                <div class="text-sm text-slate-300 font-medium">{prop.game.awayTeam}</div>
+                                <div class="text-xs text-slate-300 my-0.5">@</div>
+                                <div class="text-sm text-slate-300 font-medium">{prop.game.homeTeam}</div>
+                                <div class="text-xs text-slate-500 mt-1">
                                     {new Date(prop.game.commenceTime).toLocaleDateString()}
                                 </div>
                             </td>
-                            <td class="px-6 py-4">
-                                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                            <td class="px-6 py-4 w-40">
+                                <span class="px-3 py-1.5 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
                                     {formatPropType(prop.propType)}
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <div class="font-bold">{prop.line}</div>
+                                <div class="text-2xl font-bold text-slate-100">{prop.line}</div>
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <button
@@ -263,10 +260,10 @@
                                         );
                                         openBetSlip(prop, 'over', bestBook);
                                     }}
-                                    class="bg-green-100 hover:bg-green-200 px-3 py-2 rounded transition"
+                                    class="odds-btn odds-btn-over w-28"
                                 >
-                                    <div class="font-bold text-green-700">{formatOdds(prop.bestOverOdds)}</div>
-                                    <div class="text-xs text-gray-600">{prop.bestOverSportsbook}</div>
+                                    <div class="text-lg font-bold">{formatOdds(prop.bestOverOdds)}</div>
+                                    <div class="text-xs mt-0.5 opacity-75">{prop.bestOverSportsbook}</div>
                                 </button>
                             </td>
                             <td class="px-6 py-4 text-center">
@@ -277,45 +274,45 @@
                                         );
                                         openBetSlip(prop, 'under', bestBook);
                                     }}
-                                    class="bg-red-100 hover:bg-red-200 px-3 py-2 rounded transition"
+                                    class="odds-btn odds-btn-under w-28"
                                 >
-                                    <div class="font-bold text-red-700">{formatOdds(prop.bestUnderOdds)}</div>
-                                    <div class="text-xs text-gray-600">{prop.bestUnderSportsbook}</div>
+                                    <div class="text-lg font-bold">{formatOdds(prop.bestUnderOdds)}</div>
+                                    <div class="text-xs mt-0.5 opacity-75">{prop.bestUnderSportsbook}</div>
                                 </button>
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <button
                                     on:click={() => toggleExpand(prop.id)}
-                                    class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                    class="px-4 py-2 text-sm font-semibold text-primary hover:text-primary-light hover:bg-primary/10 rounded-lg transition-all"
                                 >
-                                    {expandedPropId === prop.id ? '▼ Hide' : '► Show All Books'}
+                                    {expandedPropId === prop.id ? '▼ Hide All' : '► All Books'}
                                 </button>
                             </td>
                         </tr>
 
                         <!-- Expanded Details Row -->
                         {#if expandedPropId === prop.id}
-                            <tr class="bg-gray-50">
-                                <td colspan="7" class="px-6 py-4">
-                                    <div class="text-sm font-semibold text-gray-700 mb-3">All Sportsbooks</div>
+                            <tr class="bg-slate-900/50">
+                                <td colspan="7" class="px-6 py-6">
+                                    <div class="text-sm font-bold text-slate-300 mb-4">All Sportsbooks</div>
                                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {#each prop.allOdds as bookOdds}
-                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
-                                                <div class="font-semibold text-gray-900 mb-3">{bookOdds.sportsbook}</div>
+                                            <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-slate-600 transition-colors">
+                                                <div class="font-bold text-slate-100 mb-3 text-center">{bookOdds.sportsbook}</div>
                                                 <div class="flex gap-2">
                                                     <button
                                                         on:click={() => openBetSlip(prop, 'over', bookOdds)}
-                                                        class="flex-1 bg-green-50 hover:bg-green-100 border border-green-200 rounded px-3 py-2 transition"
+                                                        class="flex-1 bg-success/10 hover:bg-success/20 border-2 border-success/30 hover:border-success/50 rounded-lg px-3 py-3 transition-all hover:scale-105"
                                                     >
-                                                        <div class="text-xs text-gray-600">Over</div>
-                                                        <div class="font-bold text-green-700">{formatOdds(bookOdds.overOdds)}</div>
+                                                        <div class="text-xs text-success/70 mb-1">Over</div>
+                                                        <div class="font-bold text-success text-lg">{formatOdds(bookOdds.overOdds)}</div>
                                                     </button>
                                                     <button
                                                         on:click={() => openBetSlip(prop, 'under', bookOdds)}
-                                                        class="flex-1 bg-red-50 hover:bg-red-100 border border-red-200 rounded px-3 py-2 transition"
+                                                        class="flex-1 bg-danger/10 hover:bg-danger/20 border-2 border-danger/30 hover:border-danger/50 rounded-lg px-3 py-3 transition-all hover:scale-105"
                                                     >
-                                                        <div class="text-xs text-gray-600">Under</div>
-                                                        <div class="font-bold text-red-700">{formatOdds(bookOdds.underOdds)}</div>
+                                                        <div class="text-xs text-danger/70 mb-1">Under</div>
+                                                        <div class="font-bold text-danger text-lg">{formatOdds(bookOdds.underOdds)}</div>
                                                     </button>
                                                 </div>
                                             </div>
@@ -333,70 +330,70 @@
 
 <!-- Bet Slip Modal -->
 {#if showBetSlip && selectedProp}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 class="text-2xl font-bold mb-4">Place Bet</h2>
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h2 class="text-2xl font-bold text-slate-100 mb-6">Place Bet</h2>
 
-            <div class="mb-4 p-4 bg-gray-50 rounded">
-                <div class="font-semibold">{selectedProp.playerName}</div>
-                <div class="text-sm text-gray-600">
+            <div class="mb-6 p-4 bg-slate-900 rounded-lg border border-slate-700">
+                <div class="font-bold text-slate-100 text-lg">{selectedProp.playerName}</div>
+                <div class="text-sm text-slate-300 mt-2">
                     {formatPropType(selectedProp.propType)} {selectedSide === 'over' ? 'Over' : 'Under'} {selectedProp.line}
                 </div>
-                <div class="text-sm text-gray-600 mt-1">
+                <div class="text-sm text-slate-400 mt-1">
                     {selectedProp.game.awayTeam} @ {selectedProp.game.homeTeam}
                 </div>
             </div>
 
             <div class="mb-4">
-                <div class="block text-sm font-medium mb-2">Sportsbook</div>
-                <div class="p-3 bg-blue-50 rounded">
+                <div class="block text-sm font-semibold text-slate-300 mb-2">Sportsbook</div>
+                <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-slate-100 font-medium">
                     {selectedSportsbook.sportsbook}
                 </div>
             </div>
 
             <div class="mb-4">
-                <div class="block text-sm font-medium mb-2">Odds</div>
-                <div class="p-3 bg-blue-50 rounded font-bold">
+                <div class="block text-sm font-semibold text-slate-300 mb-2">Odds</div>
+                <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 font-bold text-primary text-lg">
                     {formatOdds(selectedSide === 'over' ? selectedSportsbook.overOdds : selectedSportsbook.underOdds)}
                 </div>
             </div>
 
-            <div class="mb-4">
-                <label for="bet-amount" class="block text-sm font-medium mb-2">Bet Amount ($)</label>
+            <div class="mb-6">
+                <label for="bet-amount" class="block text-sm font-semibold text-slate-300 mb-2">Bet Amount ($)</label>
                 <input
                     id="bet-amount"
                     type="number"
                     bind:value={betAmount}
                     min="1"
                     max={user?.balance || 0}
-                    class="w-full border rounded px-3 py-2"
+                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-3 text-lg font-semibold focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
             </div>
 
-            <div class="mb-4 p-3 bg-green-50 rounded">
-                <div class="text-sm text-gray-600">Potential Payout</div>
-                <div class="text-xl font-bold text-green-600">
+            <div class="mb-6 p-4 bg-gradient-to-r from-success/10 to-success/5 rounded-lg border border-success/30">
+                <div class="text-sm text-slate-400 mb-1">Potential Payout</div>
+                <div class="text-2xl font-bold text-success">
                     ${calculatePayout(betAmount, selectedSide === 'over' ? selectedSportsbook.overOdds : selectedSportsbook.underOdds).toFixed(2)}
                 </div>
             </div>
 
             {#if errorMessage}
-                <div class="mb-4 p-3 bg-red-100 text-red-700 rounded">
+                <div class="mb-4 p-4 bg-danger/10 text-danger rounded-lg border border-danger/30">
                     {errorMessage}
                 </div>
             {/if}
 
-            <div class="flex gap-2">
+            <div class="flex gap-3">
                 <button
                     on:click={placeBet}
                     disabled={placing}
-                    class="flex-1 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:bg-gray-400"
+                    class="flex-1 bg-gradient-to-r from-success to-success-dark text-white px-6 py-3 rounded-lg font-bold hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                     {placing ? 'Placing...' : 'Place Bet'}
                 </button>
                 <button
                     on:click={() => showBetSlip = false}
-                    class="flex-1 bg-gray-300 px-4 py-2 rounded hover:bg-gray-400"
+                    class="flex-1 bg-slate-700 border border-slate-600 text-slate-100 px-6 py-3 rounded-lg font-semibold hover:bg-slate-600 transition-all"
                 >
                     Cancel
                 </button>

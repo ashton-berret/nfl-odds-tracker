@@ -2,7 +2,7 @@
     import "../app.css";
     import { page } from '$app/stores';
 
-    // User comes from +layout.ts now (no more onMount fetching)
+    // User comes from +layout.ts now
     export let data: {
         user: {
             id: number;
@@ -44,54 +44,58 @@
 
 <svelte:window on:click={handleClickOutside} />
 
-<div class="min-h-screen bg-gray-50">
+<div class="min-h-screen bg-slate-900">
     <!-- Navigation Bar -->
-    <nav class="bg-white shadow-sm border-b border-gray-200">
+    <nav class="bg-slate-800/50 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <!-- Left: Logo & Main Nav -->
                 <div class="flex">
                     <!-- Logo -->
-                    <a href="/" class="flex items-center px-2 text-xl font-bold text-gray-900">
-                        <span class="text-2xl mr-2">🏈</span>
-                        PropBet Sim
+                    <a href="/" class="flex items-center px-2 text-xl font-bold text-slate-100 hover:text-white transition-colors group">
+                        <span class="text-2xl mr-2 group-hover:scale-110 transition-transform">🏈</span>
+                        <span class="bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+                            PropBet Sim
+                        </span>
                     </a>
 
                     <!-- Main Navigation Links -->
-                    <div class="hidden sm:ml-6 sm:flex sm:space-x-4">
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-2">
                         <a href="/"
-                            class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                            {isActive('/') && currentPath === '/'
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'text-gray-700 hover:bg-gray-50'}"
+                            class="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg transition-all
+                            {currentPath === '/'
+                                ? 'bg-primary/20 text-primary shadow-glow-sm'
+                                : 'text-slate-300 hover:text-slate-100 hover:bg-slate-700/50'}"
                         >
                             Dashboard
                         </a>
 
                         <a href="/props"
-                            class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                            {isActive('/props')
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'text-gray-700 hover:bg-gray-50'}"
+                            class="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg transition-all
+                            {currentPath.startsWith('/props')
+                                ? 'bg-primary/20 text-primary shadow-glow-sm'
+                                : 'text-slate-300 hover:text-slate-100 hover:bg-slate-700/50'}"
                         >
                             Props
                         </a>
 
                         <a href="/models"
-                            class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                            {isActive('/models')
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'text-gray-700 hover:bg-gray-50'}"
+                            class="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg transition-all
+                            {currentPath.startsWith('/models')
+                                ? 'bg-primary/20 text-primary shadow-glow-sm'
+                                : 'text-slate-300 hover:text-slate-100 hover:bg-slate-700/50'}"
                         >
                             Models
-                            <span class="ml-1 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded">Pro</span>
+                            <span class="ml-2 px-2 py-0.5 text-xs bg-warning/20 text-warning border border-warning/30 rounded-full">
+                                Pro
+                            </span>
                         </a>
 
                         <a href="/my-bets"
-                            class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                            {isActive('/my-bets')
-                                ? 'bg-blue-50 text-blue-700'
-                                : 'text-gray-700 hover:bg-gray-50'}"
+                            class="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg transition-all
+                            {currentPath.startsWith('/my-bets')
+                                ? 'bg-primary/20 text-primary shadow-glow-sm'
+                                : 'text-slate-300 hover:text-slate-100 hover:bg-slate-700/50'}"
                         >
                             My Bets
                         </a>
@@ -102,9 +106,9 @@
                 <div class="flex items-center">
                     {#if user}
                         <!-- User Balance -->
-                        <div class="hidden sm:block mr-4 text-right">
-                            <div class="text-xs text-gray-500">Balance</div>
-                            <div class="text-sm font-bold text-green-600">
+                        <div class="hidden sm:block mr-6 text-right">
+                            <div class="text-xs text-slate-400 font-medium">Balance</div>
+                            <div class="text-lg font-bold text-success">
                                 ${user.balance.toFixed(2)}
                             </div>
                         </div>
@@ -113,27 +117,31 @@
                         <div class="relative user-menu">
                             <button
                                 on:click={() => showUserMenu = !showUserMenu}
-                                class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                class="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-100 hover:bg-slate-700/50 transition-all"
                             >
-                                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                <div class="w-9 h-9 bg-gradient-to-br from-primary to-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
                                     {user.username.charAt(0).toUpperCase()}
                                 </div>
-                                <span class="hidden sm:inline">{user.username}</span>
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <span class="hidden sm:inline font-semibold">{user.username}</span>
+                                <svg class="w-4 h-4 transition-transform {showUserMenu ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
 
                             {#if showUserMenu}
-                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                                <div class="absolute right-0 mt-2 w-56 bg-slate-800 rounded-lg shadow-2xl py-2 z-50 border border-slate-700">
+                                    <div class="px-4 py-3 border-b border-slate-700">
+                                        <p class="text-sm text-slate-400">Signed in as</p>
+                                        <p class="text-sm font-semibold text-slate-100 truncate">{user.email}</p>
+                                    </div>
                                     <a href="/profile"
-                                        class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        class="block px-4 py-2 text-sm text-slate-300 hover:bg-slate-700/50 hover:text-slate-100 transition-colors"
                                     >
                                         Profile & Settings
                                     </a>
                                     <button
                                         on:click={handleLogout}
-                                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        class="block w-full text-left px-4 py-2 text-sm text-danger hover:bg-slate-700/50 transition-colors"
                                     >
                                         Logout
                                     </button>
@@ -142,14 +150,14 @@
                         </div>
                     {:else}
                         <!-- Login/Register Buttons -->
-                        <div class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-3">
                             <a href="/login"
-                                class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                class="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-slate-100 transition-colors"
                             >
                                 Login
                             </a>
                             <a href="/register"
-                                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                                class="px-5 py-2 text-sm font-bold text-white bg-gradient-to-r from-primary to-blue-600 rounded-lg hover:shadow-glow-md transition-all hover:scale-105"
                             >
                                 Sign Up
                             </a>

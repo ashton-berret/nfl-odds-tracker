@@ -127,6 +127,7 @@ model User {
     username        String @unique
     passwordHash    String // using bcrypt
     balance         Float @default(1000) // start with 1k
+    startingBalance Float @default(1000)
     createdAt       DateTime @default(now())
     updatedAt       DateTime @updatedAt
 

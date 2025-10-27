@@ -36,6 +36,8 @@ export async function load({ fetch, parent }) {
         const settledBets = allBets.filter((b: any) => b.status === 'won' || b.status === 'lost');
         const wonBets = allBets.filter((b: any) => b.status === 'won');
         const pendingBets = allBets.filter((b: any) => b.status === 'pending');
+        const currentBalance = Number(user.balance) || 0;
+        const startBalance = Number(user.startingBalance) || 1000;
 
         const stats = {
             totalBets: allBets.length,
@@ -43,7 +45,7 @@ export async function load({ fetch, parent }) {
             lostBets: settledBets.length - wonBets.length,
             pendingBets: pendingBets.length,
             winRate: settledBets.length > 0 ? (wonBets.length / settledBets.length * 100).toFixed(1) : '0.0',
-            totalProfit: betsData.totalProfit || 0
+            totalProfit: currentBalance - startBalance
         };
 
         console.log('[DASHBOARD LOAD] Stats calculated:', stats);

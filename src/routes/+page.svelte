@@ -117,7 +117,7 @@
                 <div class="stat-card {stats.totalProfit >= 0 ? 'border-success' : 'border-danger'} group {stats.totalProfit >= 0 ? 'hover:shadow-glow-success' : 'hover:shadow-glow-danger'}">
                     <div class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Total P&L</div>
                     <div class="text-4xl font-bold {stats.totalProfit >= 0 ? 'text-success' : 'text-danger'} mb-1 group-hover:scale-110 transition-transform">
-                        {stats.totalProfit >= 0 ? '+' : ''}{stats.totalProfit.toFixed(2)}
+                        {stats.totalProfit >= 0 ? '+' : ''}${stats.totalProfit.toFixed(2)}
                     </div>
                     <div class="text-xs text-slate-500">
                         {stats.totalProfit >= 0 ? 'Profit' : 'Loss'}

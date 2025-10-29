@@ -77,36 +77,48 @@ model Sportsbook {
   bets      Bet[]
 }
 
-model PlayerProp {
-  id            String   @id @default(cuid())
-  gameId        String
-  playerId      String
-  propType      String   // "rushing_yds", "receiving_yds", "pass_yds", "pass_tds", etc.
-  line          Float    // The over/under number (e.g., 85.5 receiving yards)
-  createdAt     DateTime @default(now())
+model PropOdds {
+    id            String   @id @default(cuid())
+    propId        String
+    sportsbookId  String
+    source        String   @default("theoddsapi")  // "theoddsapi" or "draftkings"
 
-  game          Game       @relation(fields: [gameId], references: [id])
-  player        Player     @relation(fields: [playerId], references: [id])
-  propOdds      PropOdds[]
-  bets          Bet[]
+    // For over/under props (rushing yards, receiving yards, etc)
+    overOdds      Int?     // Now nullable
+    underOdds     Int?     // Now nullable
 
-  @@unique([gameId, playerId, propType, line])  // One prop per game/player/type/line combo
-  @@index([gameId])
-  @@index([playerId])
+    // For single-outcome props (anytime TD, first TD, 2+ TD)
+    outcomeType   String?  // "anytime_td", "first_td", "2plus_td"
+    singleOdds    Int?     // The single price (+400)
+
+    fetchedAt     DateTime @default(now())
+
+    prop          PlayerProp @relation(fields: [propId], references: [id])
+    sportsbook    Sportsbook @relation(fields: [sportsbookId], references: [id])
+
+    @@index([propId, sportsbookId, fetchedAt])
 }
 
-model PropOdds {
-  id            String   @id @default(cuid())
-  propId        String
-  sportsbookId  String
-  overOdds      Int      // American odds for OVER (e.g., -110)
-  underOdds     Int      // American odds for UNDER (e.g., -110)
-  fetchedAt     DateTime @default(now())
+model PlayerProp {
+    id            String   @id @default(cuid())
+    gameId        String
+    playerId      String
+    propType      String   // "rushing_yds", "anytime_td", "first_td", etc.
+    line          Float?   // Now nullable - TD props have no line
+    createdAt     DateTime @default(now())
 
-  prop          PlayerProp @relation(fields: [propId], references: [id])
-  sportsbook    Sportsbook @relation(fields: [sportsbookId], references: [id])
+    game          Game       @relation(fields: [gameId], references: [id])
+    player        Player     @relation(fields: [playerId], references: [id])
+    propOdds      PropOdds[]
+    bets          Bet[]
 
-  @@index([propId, sportsbookId, fetchedAt])
+    // Remove the unique constraint that includes line
+    // @@unique([gameId, playerId, propType, line])  // DELETE THIS
+
+    // Add indexes instead
+    @@index([gameId])
+    @@index([playerId])
+    @@index([gameId, playerId, propType])
 }
 
 // Optional: Track actual results for props
@@ -126,8 +138,8 @@ model User {
     email           String @unique
     username        String @unique
     passwordHash    String // using bcrypt
-    balance         Float @default(1000) // start with 1k
-    startingBalance Float @default(1000)
+    balance         Float  // start with 1k
+    startingBalance Float
     createdAt       DateTime @default(now())
     updatedAt       DateTime @updatedAt
 

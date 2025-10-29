@@ -21,7 +21,8 @@ export async function GET({ cookies }) {
             id: user.id,
             email: user.email,
             username: user.username,
-            balance: user.balance
+            balance: user.balance,
+            startingBalance: user.startingBalance
         }
     });
 }

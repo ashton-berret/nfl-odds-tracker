@@ -12,7 +12,7 @@ export async function POST({ request, cookies }) {
     console.log('[API /auth/register] Registration attempt');
 
     try {
-        const { email, username, password } = await request.json();
+        const { email, username, password, startingBalance } = await request.json();
 
         const validatedStartingBalance = startingBalance && startingBalance >= 100 && startingBalance <= 1000000 ? startingBalance : 1000;
         console.log('[API /auth/register] Starting balance:', validatedStartingBalance);

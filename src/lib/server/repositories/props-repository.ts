@@ -1,3 +1,5 @@
+// src/lib/server/repositories/props-repository.ts
+
 import { prisma } from '$lib/server/db';
 import type { ParsedPlayerProp } from '$lib/server/api/props-parser';
 
@@ -10,11 +12,11 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
     try {
         // create or update the home team
         const homeTeamRecord = await prisma.team.upsert({
-            where: { name: homeTeam }, // look for team with exact name
-            update: {}, // don't change anything if found
+            where: { name: homeTeam },
+            update: {},
             create: {
                 name: homeTeam,
-                abbreviation: homeTeam.split(' ').pop() || homeTeam // get the team name following the city
+                abbreviation: homeTeam.split(' ').pop() || homeTeam
             }
         });
         console.log(`[PROPS REPO] Home team: ${homeTeamRecord.name} (ID: ${homeTeamRecord.id})`);
@@ -30,7 +32,7 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
         });
         console.log(`[PROPS REPO] Away team: ${awayTeamRecord.name} (ID: ${awayTeamRecord.id})`);
 
-        // create or update the game, using externalId from the API as a unique identifier so if we fetch the same game twice, we update rather than creating a duplicate
+        // create or update the game
         const gameRecord = await prisma.game.upsert({
             where: { externalId: gameExternalId },
             update: {
@@ -57,7 +59,8 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
                     console.log(`[PROPS REPO] Skipping ${prop.playerName} - not on either team`);
                     continue;
                 }
-                // create or update the player -> use a compound unique key of name + team
+
+                // create or update the player
                 const playerRecord = await prisma.player.upsert({
                     where: {
                         name_teamId: {
@@ -68,7 +71,7 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
                     update: {
                         active: true,
                         position: playerInfo.position
-                    }, // if player exists set them to active
+                    },
                     create: {
                         name: prop.playerName,
                         position: playerInfo.position,
@@ -78,41 +81,40 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
                 });
                 console.log(`[PROPS REPO] Player: ${playerRecord.name} (ID: ${playerRecord.id})`);
 
-                // create or update the player prop with the constraint of gameId + playerId + propType + line
-                // if we get the same prop twice, we just update it but all of those constraints must be exact same so if lines change, we get both records
-                const playerPropRecord = await prisma.playerProp.upsert({
+                // Find or create the player prop (no longer using unique constraint)
+                const existingProp = await prisma.playerProp.findFirst({
                     where: {
-                        gameId_playerId_propType_line: {
-                            gameId: gameRecord.id,
-                            playerId: playerRecord.id,
-                            propType: prop.propType,
-                            line: prop.line
-                        }
-                    },
-                    update: {},
-                    create: {
                         gameId: gameRecord.id,
                         playerId: playerRecord.id,
                         propType: prop.propType,
                         line: prop.line
                     }
                 });
-                console.log(`[PROPS REPO] PlayerProp created/found at: ${playerPropRecord.id}`);
+
+                let playerPropRecord;
+                if (existingProp) {
+                    console.log(`[PROPS REPO] PlayerProp already exists: ${existingProp.id}`);
+                    playerPropRecord = existingProp;
+                } else {
+                    playerPropRecord = await prisma.playerProp.create({
+                        data: {
+                            gameId: gameRecord.id,
+                            playerId: playerRecord.id,
+                            propType: prop.propType,
+                            line: prop.line
+                        }
+                    });
+                    console.log(`[PROPS REPO] PlayerProp created: ${playerPropRecord.id}`);
+                }
 
                 // save odds for each sportsbook
-                /**
-                 * props.allOdds looks like
-                 * [
-                 *  { sportsbook: 'name', overOdds: num, underOdds: num}
-                        * ]
-                    */
-                console.log(`[PropsRepo]   Prop has ${prop.allOdds.length} sportsbooks with odds`);
-                console.log(`[PropsRepo]   allOdds data:`, JSON.stringify(prop.allOdds, null, 2));
+                console.log(`[PROPS REPO] Prop has ${prop.allOdds.length} sportsbooks with odds`);
 
                 for (const oddsData of prop.allOdds) {
                     try {
-                        console.log(`[PropsRepo] Attempting to save odds from ${oddsData.sportsbook}`);
-                        // find or create the sportsbook first using the sportsbook database id to link the odds to it
+                        console.log(`[PROPS REPO] Attempting to save odds from ${oddsData.sportsbook}`);
+
+                        // find or create the sportsbook
                         const sportsbookRecord = await prisma.sportsbook.upsert({
                             where: {
                                 name: oddsData.sportsbook
@@ -125,11 +127,12 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
                             }
                         });
 
-                        // create a propodds record but do not update, always create a new record -> upsert loses historical data
+                        // create a propodds record (always create new, never update)
                         await prisma.propOdds.create({
                             data: {
                                 propId: playerPropRecord.id,
                                 sportsbookId: sportsbookRecord.id,
+                                source: 'theoddsapi',  // Set the source
                                 overOdds: oddsData.overOdds,
                                 underOdds: oddsData.underOdds,
                                 fetchedAt: new Date()
@@ -156,7 +159,7 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
  * helper to find which team a player is on
  */
 async function findPlayerInfo(playerName: string, homeTeam: { id: string; name: string }, awayTeam: { id: string; name: string }): Promise<{ teamId: string; position: string } | null> {
-    console.log(`[PropsRepo] Looking up team for: ${playerName}`);
+    console.log(`[PROPS REPO] Looking up team for: ${playerName}`);
 
     const mapping = await prisma.playerTeamMapping.findFirst({
         where: {
@@ -166,29 +169,29 @@ async function findPlayerInfo(playerName: string, homeTeam: { id: string; name: 
     });
 
     if (!mapping) {
-        console.log(`[PropsRepo] ${playerName} not found in roster database`);
+        console.log(`[PROPS REPO] ${playerName} not found in roster database`);
         return null;
-      }
+    }
 
     // Check if player's team matches home team
     if (mapping.teamName === homeTeam.name) {
-        console.log(`[PropsRepo]   ✓ Found on home team: ${homeTeam.name}`);
+        console.log(`[PROPS REPO] ✓ Found on home team: ${homeTeam.name}`);
         return {
-          teamId: homeTeam.id,  // Return immediately with teamId
-          position: mapping.position || 'UNKNOWN'
+            teamId: homeTeam.id,
+            position: mapping.position || 'UNKNOWN'
         };
     }
 
-      // Check if player's team matches away team
+    // Check if player's team matches away team
     if (mapping.teamName === awayTeam.name) {
-        console.log(`[PropsRepo]   ✓ Found on away team: ${awayTeam.name}`);
+        console.log(`[PROPS REPO] ✓ Found on away team: ${awayTeam.name}`);
         return {
-          teamId: awayTeam.id,  // Return immediately with teamId
-          position: mapping.position || 'UNKNOWN'
+            teamId: awayTeam.id,
+            position: mapping.position || 'UNKNOWN'
         };
-      }
+    }
 
-      // Player is on a different team (not in this game)
-      console.log(`[PropsRepo]${playerName} is on ${mapping.teamName}, not playing in this game`);
-      return null;
+    // Player is on a different team (not in this game)
+    console.log(`[PROPS REPO] ${playerName} is on ${mapping.teamName}, not playing in this game`);
+    return null;
 }

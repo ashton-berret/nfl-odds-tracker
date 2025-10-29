@@ -109,7 +109,7 @@
                         <div class="hidden sm:block mr-6 text-right">
                             <div class="text-xs text-slate-400 font-medium">Balance</div>
                             <div class="text-lg font-bold text-success">
-                                ${user.balance.toFixed(2)}
+                                ${user.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                         </div>
 

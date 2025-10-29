@@ -37,7 +37,7 @@ export async function load({ fetch, parent }) {
         const wonBets = allBets.filter((b: any) => b.status === 'won');
         const pendingBets = allBets.filter((b: any) => b.status === 'pending');
         const currentBalance = Number(user.balance) || 0;
-        const startBalance = Number(user.startingBalance) || 1000;
+        const startBalance = Number(user.startingBalance);
 
         const stats = {
             totalBets: allBets.length,

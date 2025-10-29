@@ -86,9 +86,9 @@
                 <div class="stat-card border-success group hover:shadow-glow-success">
                     <div class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Current Balance</div>
                     <div class="text-4xl font-bold text-success mb-1 group-hover:scale-110 transition-transform">
-                        ${user.balance.toFixed(2)}
+                        ${user.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div class="text-xs text-slate-500">Starting: $1000.00</div>
+                    <div class="text-xs text-slate-500"></div>
                 </div>
 
                 <!-- Total Bets Card -->
@@ -117,7 +117,7 @@
                 <div class="stat-card {stats.totalProfit >= 0 ? 'border-success' : 'border-danger'} group {stats.totalProfit >= 0 ? 'hover:shadow-glow-success' : 'hover:shadow-glow-danger'}">
                     <div class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Total P&L</div>
                     <div class="text-4xl font-bold {stats.totalProfit >= 0 ? 'text-success' : 'text-danger'} mb-1 group-hover:scale-110 transition-transform">
-                        {stats.totalProfit >= 0 ? '+' : ''}${stats.totalProfit.toFixed(2)}
+                        {stats.totalProfit >= 0 ? '+' : ''}${Math.abs(stats.totalProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div class="text-xs text-slate-500">
                         {stats.totalProfit >= 0 ? 'Profit' : 'Loss'}

@@ -356,11 +356,18 @@
 </script>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-8">
-        <h1 class="text-4xl font-bold text-slate-100 mb-2">NFL Player Props</h1>
-        <p class="text-slate-400 text-lg">Compare odds and explore alternate lines</p>
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-4xl font-bold text-slate-100 mb-2">NFL Player Props</h1>
+            <p class="text-slate-400 text-lg">Compare odds and explore alternate lines</p>
+        </div>
+        <button
+            on:click={toggleExpandAll}
+            class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg font-semibold transition-colors whitespace-nowrap"
+        >
+            {allExpanded ? 'Collapse All' : 'Expand All'}
+        </button>
     </div>
-
     <!-- Search Bar + Filters + Controls -->
     <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 p-4 mb-6">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols- gap-3">
@@ -406,14 +413,6 @@
                 <option value="sunday_night">Sunday Night</option>
                 <option value="monday">Monday Night</option>
             </select>
-
-            <!-- Toggle Expand and Collapse -->
-            <button
-                on:click={toggleExpandAll}
-                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg font-semibold transition-colors"
-            >
-                { allExpanded ? 'Collapse All' : 'Expand All' }
-            </button>
 
         </div>
 

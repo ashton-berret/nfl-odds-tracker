@@ -5,10 +5,13 @@
     import { page } from '$app/stores';
     $: user = $page.data.user;
 
-    let activeTab: 'consensus' | 'draftkings' = 'consensus';
+    let activeTab: 'draftkings' | 'consensus' = 'draftkings';
 
     // Filter states
     let searchQuery = '';
+    let selectedPropType = 'all';
+    let selectedTeam = 'all';
+    let selectedTimeSlot = 'all';
 
     // Bet slip state
     let showBetSlip = false;
@@ -19,8 +22,42 @@
     let placing = false;
     let errorMessage = '';
 
+    let allExpanded = false;
+
     // Expandable game state
     let expandedGames = new Set<string>();
+
+    /**
+     * Get unique prop types for filter dropdown
+     */
+    $: allPropTypes = (() => {
+        const types = new Set<string>();
+        if (activeTab === 'draftkings') {
+            data.oddsApiProps.forEach((p: any) => types.add(p.propType));
+        } else {
+            data.dkProps.forEach((pg: any) => types.add(pg.propType));
+        }
+        return Array.from(types).sort();
+    })();
+
+    /**
+     * Get unique teams for filter dropdown
+     */
+    $: allTeams = (() => {
+        const teams = new Set<string>();
+        if (activeTab === 'draftkings') {
+            data.oddsApiProps.forEach((p: any) => {
+                teams.add(p.game.homeTeam);
+                teams.add(p.game.awayTeam);
+            });
+        } else {
+            data.dkProps.forEach((pg: any) => {
+                teams.add(pg.game.homeTeam);
+                teams.add(pg.game.awayTeam);
+            });
+        }
+        return Array.from(teams).sort();
+    })();
 
     /**
      * Normalize player names for fuzzy matching
@@ -32,6 +69,26 @@
             .replace(/\s+/g, ' ')
             .trim();
     }
+
+    /**
+     * determine time slot based on game time
+     */
+    function getGameTimeSlot(commenceTime: string): string {
+        const date = new Date(commenceTime);
+        const dayOfWeek = date.getDay();
+        const hour = date.getHours();
+
+        if (dayOfWeek === 4) return 'thursday';
+        if (dayOfWeek === 0) {
+            if (hour < 13) return 'sunday_early';
+            if (hour < 19) return 'sunday_afternoon';
+            return 'sunday_night';
+        }
+        if (dayOfWeek === 1) return 'monday';
+
+        return 'other';
+    }
+
 
     /**
      * Toggle game expansion
@@ -48,19 +105,27 @@
     /**
      * Expand all games
      */
-    function expandAll() {
-        if (activeTab === 'consensus') {
-            expandedGames = new Set(groupedOddsApiProps.map(g => g.gameId));
+    function toggleExpandAll() {
+        if (allExpanded) {
+            expandedGames = new Set();
         } else {
-            expandedGames = new Set(groupedDKProps.map(g => g.gameId));
+            if (activeTab === 'consensus') {
+                expandedGames = new Set(groupedOddsApiProps.map(g => g.gameId));
+            } else {
+                expandedGames = new Set(groupedDKProps.map(g => g.gameId));
+            }
         }
+        allExpanded = !allExpanded;
     }
 
     /**
-     * Collapse all games
+     * Clear all filters
      */
-    function collapseAll() {
-        expandedGames = new Set();
+    function clearFilters() {
+        searchQuery = '';
+        selectedPropType = 'all';
+        selectedTeam = 'all';
+        selectedTimeSlot = 'all';
     }
 
     /**
@@ -148,8 +213,9 @@
         }
     }
 
-    // Filtered Odds API props with fuzzy name matching
+    // Filtered Odds API props with all filters
     $: filteredOddsApiProps = data.oddsApiProps.filter((prop: any) => {
+        // Search filter
         if (searchQuery) {
             const normalizedSearch = normalizePlayerName(searchQuery);
             const normalizedPlayer = normalizePlayerName(prop.playerName);
@@ -157,11 +223,32 @@
                 return false;
             }
         }
+
+        // Prop type filter
+        if (selectedPropType !== 'all' && prop.propType !== selectedPropType) {
+            return false;
+        }
+
+        // Team filter
+        if (selectedTeam !== 'all') {
+            if (prop.game.homeTeam !== selectedTeam && prop.game.awayTeam !== selectedTeam) {
+                return false;
+            }
+        }
+
+        if (selectedTimeSlot !== 'all') {
+            const gameSlot = getGameTimeSlot(prop.game.commenceTime);
+            if (gameSlot !== selectedTimeSlot) {
+                return false;
+            }
+        }
+
         return true;
     });
 
-    // Filtered DK props with fuzzy name matching
+    // Filtered DK props with all filters
     $: filteredDKProps = data.dkProps.filter((playerGroup: any) => {
+        // Search filter
         if (searchQuery) {
             const normalizedSearch = normalizePlayerName(searchQuery);
             const normalizedPlayer = normalizePlayerName(playerGroup.playerName);
@@ -169,6 +256,27 @@
                 return false;
             }
         }
+
+        // Prop type filter
+        if (selectedPropType !== 'all' && playerGroup.propType !== selectedPropType) {
+            return false;
+        }
+
+        // Team filter
+        if (selectedTeam !== 'all') {
+            if (playerGroup.game.homeTeam !== selectedTeam && playerGroup.game.awayTeam !== selectedTeam) {
+                return false;
+            }
+        }
+
+        if (selectedTimeSlot !== 'all') {
+            const gameSlot = getGameTimeSlot(playerGroup.game.commenceTime);
+            if (gameSlot !== selectedTimeSlot) {
+                return false;
+            }
+        }
+
+
         return true;
     });
 
@@ -253,44 +361,82 @@
         <p class="text-slate-400 text-lg">Compare odds and explore alternate lines</p>
     </div>
 
-    <!-- Search Bar + Controls -->
+    <!-- Search Bar + Filters + Controls -->
     <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 p-4 mb-6">
-        <div class="flex gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols- gap-3">
+            <!-- Search -->
             <input
                 type="text"
                 bind:value={searchQuery}
-                placeholder="Search player name... (e.g., DeVon, De'Von, Derrick)"
-                class="flex-1 bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-slate-500"
+                placeholder="Search player..."
+                class="bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-slate-500"
             />
+
+            <!-- Prop Type Filter -->
+            <select
+                bind:value={selectedPropType}
+                class="bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+                <option value="all">All Prop Types</option>
+                {#each allPropTypes as propType}
+                    <option value={propType}>{formatPropType(propType)}</option>
+                {/each}
+            </select>
+
+            <!-- Team Filter -->
+            <select
+                bind:value={selectedTeam}
+                class="bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+                <option value="all">All Teams</option>
+                {#each allTeams as team}
+                    <option value={team}>{team}</option>
+                {/each}
+            </select>
+
+            <!-- Time Slot Filter -->
+            <select
+                bind:value={selectedTimeSlot}
+                class="bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+                <option value="all">All Time Slots</option>
+                <option value="thursday">Thursday Night</option>
+                <option value="sunday_early">Sunday Early (12pm CT)</option>
+                <option value="sunday_afternoon">Sunday Afternoon (3pm CT)</option>
+                <option value="sunday_night">Sunday Night</option>
+                <option value="monday">Monday Night</option>
+            </select>
+
+            <!-- Toggle Expand and Collapse -->
             <button
-                on:click={expandAll}
+                on:click={toggleExpandAll}
                 class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg font-semibold transition-colors"
             >
-                Expand All
+                { allExpanded ? 'Collapse All' : 'Expand All' }
             </button>
-            <button
-                on:click={collapseAll}
-                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg font-semibold transition-colors"
-            >
-                Collapse All
-            </button>
+
         </div>
+
+        <!-- Clear Filters + Results Count -->
+        {#if searchQuery || selectedPropType !== 'all' || selectedTeam !== 'all'}
+            <div class="mt-3 flex items-center gap-3">
+                <button
+                    on:click={clearFilters}
+                    class="text-sm text-primary hover:text-primary-light font-semibold"
+                >
+                    Clear all filters
+                </button>
+                <span class="text-xs text-slate-500">
+                    {activeTab === 'draftkings' ? filteredOddsApiProps.length : filteredDKProps.length} props shown
+                </span>
+            </div>
+        {/if}
     </div>
 
     <!-- Tabs -->
     <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 mb-6">
         <div class="flex border-b border-slate-700">
-            <button
-                on:click={() => activeTab = 'consensus'}
-                class="flex-1 px-6 py-4 text-center font-semibold transition-all {activeTab === 'consensus'
-                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
-                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/30'}"
-            >
-                <div class="text-lg">Market Consensus</div>
-                <div class="text-xs mt-1 opacity-75">
-                    Compare 6+ sportsbooks • {groupedOddsApiProps.length} games
-                </div>
-            </button>
+            <!-- DraftKings first -->
             <button
                 on:click={() => activeTab = 'draftkings'}
                 class="flex-1 px-6 py-4 text-center font-semibold transition-all {activeTab === 'draftkings'
@@ -302,20 +448,139 @@
                     Explore alternate spreads • {groupedDKProps.length} games
                 </div>
             </button>
+
+            <!-- Market Consensus second -->
+            <button
+                on:click={() => activeTab = 'consensus'}
+                class="flex-1 px-6 py-4 text-center font-semibold transition-all {activeTab === 'consensus'
+                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/30'}"
+            >
+                <div class="text-lg">Market Consensus</div>
+                <div class="text-xs mt-1 opacity-75">
+                    Compare 6+ sportsbooks • {groupedOddsApiProps.length} games
+                </div>
+            </button>
         </div>
 
         <!-- Tab Content -->
         <div class="p-6">
-            {#if activeTab === 'consensus'}
+            {#if activeTab === 'draftkings'}
+                <!-- DraftKings Alt Lines View - Grouped by Game -->
+                <div class="space-y-4">
+                    {#if groupedDKProps.length === 0}
+                        <div class="text-center py-12">
+                            {#if data.dkProps.length === 0}
+                                <p class="text-slate-400 mb-4">No DraftKings data available.</p>
+                                <a href="/admin" class="text-primary underline font-semibold">Go to Admin Panel to fetch props</a>
+                            {:else}
+                                <p class="text-slate-400">No props match your filters.</p>
+                            {/if}
+                        </div>
+                    {:else}
+                        {#each groupedDKProps as game}
+                            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                <!-- Game Header (Collapsible) -->
+                                <button
+                                    on:click={() => toggleGame(game.gameId)}
+                                    class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+                                >
+                                    <div class="text-left">
+                                        <h3 class="text-xl font-bold text-slate-100">
+                                            {game.awayTeam} @ {game.homeTeam}
+                                        </h3>
+                                        <p class="text-sm text-slate-400 mt-1">
+                                            {formatDate(game.commenceTime)} • {game.playerGroups.length} players
+                                        </p>
+                                    </div>
+                                    <div class="text-slate-400 text-xl">
+                                        {expandedGames.has(game.gameId) ? '▼' : '▶'}
+                                    </div>
+                                </button>
+
+                                <!-- Game Props (Collapsible) -->
+                                {#if expandedGames.has(game.gameId)}
+                                    <div class="border-t border-slate-700 p-6 space-y-4">
+                                        {#each game.playerGroups as playerGroup}
+                                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
+                                                <!-- Player Header -->
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <h4 class="text-lg font-bold text-slate-100">{playerGroup.playerName}</h4>
+                                                    <span class="px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
+                                                        {formatPropType(playerGroup.propType)}
+                                                    </span>
+                                                </div>
+
+                                                <!-- Alt Lines Table -->
+                                                <div class="overflow-x-auto">
+                                                    <table class="w-full">
+                                                        <thead class="text-xs text-slate-400 border-b border-slate-700">
+                                                            <tr>
+                                                                <th class="text-left py-2 px-3">Line</th>
+                                                                <th class="text-center py-2 px-3">Odds</th>
+                                                                <th class="text-center py-2 px-3"></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-slate-700/50">
+                                                            {#each playerGroup.lines as line}
+                                                                <tr class="hover:bg-slate-900/50 transition-colors">
+                                                                    <td class="py-2 px-3">
+                                                                        <span class="font-semibold text-slate-100">
+                                                                            Over {line.line}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td class="py-2 px-3 text-center">
+                                                                        {#if line.odds}
+                                                                            <span class="font-bold text-lg {line.odds.overOdds > 0 ? 'text-success' : 'text-slate-300'}">
+                                                                                {formatOdds(line.odds.overOdds)}
+                                                                            </span>
+                                                                        {:else}
+                                                                            <span class="text-slate-500">N/A</span>
+                                                                        {/if}
+                                                                    </td>
+                                                                    <td class="py-2 px-3 text-center">
+                                                                        {#if line.odds && line.odds.overOdds !== null}
+                                                                            <button
+                                                                                on:click={() => openBetSlip({
+                                                                                    id: line.id,
+                                                                                    playerName: playerGroup.playerName,
+                                                                                    propType: playerGroup.propType,
+                                                                                    line: line.line,
+                                                                                    game: playerGroup.game
+                                                                                }, 'over', {
+                                                                                    sportsbook: line.odds.sportsbook.name,
+                                                                                    overOdds: line.odds.overOdds
+                                                                                })}
+                                                                                class="px-4 py-1 bg-primary hover:bg-primary-dark text-white rounded font-semibold text-sm transition-all"
+                                                                            >
+                                                                                Bet
+                                                                            </button>
+                                                                        {/if}
+                                                                    </td>
+                                                                </tr>
+                                                            {/each}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                        {/each}
+                    {/if}
+                </div>
+
+            {:else}
                 <!-- Market Consensus View - Grouped by Game -->
                 <div class="space-y-4">
                     {#if groupedOddsApiProps.length === 0}
                         <div class="text-center py-12">
                             {#if data.oddsApiProps.length === 0}
                                 <p class="text-slate-400 mb-4">No market consensus data available.</p>
-                                <a href="/api/test-props" class="text-primary underline font-semibold">Fetch Odds API props</a>
+                                <a href="/admin" class="text-primary underline font-semibold">Go to Admin Panel to fetch props</a>
                             {:else}
-                                <p class="text-slate-400">No props match your search.</p>
+                                <p class="text-slate-400">No props match your filters.</p>
                             {/if}
                         </div>
                     {:else}
@@ -405,111 +670,6 @@
                                                             </div>
                                                         </div>
                                                     {/each}
-                                                </div>
-                                            </div>
-                                        {/each}
-                                    </div>
-                                {/if}
-                            </div>
-                        {/each}
-                    {/if}
-                </div>
-            {:else}
-                <!-- DraftKings Alt Lines View - Grouped by Game -->
-                <div class="space-y-4">
-                    {#if groupedDKProps.length === 0}
-                        <div class="text-center py-12">
-                            {#if data.dkProps.length === 0}
-                                <p class="text-slate-400 mb-4">No DraftKings data available.</p>
-                                <a href="/api/test-dk-save" class="text-primary underline font-semibold">Fetch DK props</a>
-                            {:else}
-                                <p class="text-slate-400">No props match your search.</p>
-                            {/if}
-                        </div>
-                    {:else}
-                        {#each groupedDKProps as game}
-                            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                                <!-- Game Header (Collapsible) -->
-                                <button
-                                    on:click={() => toggleGame(game.gameId)}
-                                    class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
-                                >
-                                    <div class="text-left">
-                                        <h3 class="text-xl font-bold text-slate-100">
-                                            {game.awayTeam} @ {game.homeTeam}
-                                        </h3>
-                                        <p class="text-sm text-slate-400 mt-1">
-                                            {formatDate(game.commenceTime)} • {game.playerGroups.length} players
-                                        </p>
-                                    </div>
-                                    <div class="text-slate-400 text-xl">
-                                        {expandedGames.has(game.gameId) ? '▼' : '▶'}
-                                    </div>
-                                </button>
-
-                                <!-- Game Props (Collapsible) -->
-                                {#if expandedGames.has(game.gameId)}
-                                    <div class="border-t border-slate-700 p-6 space-y-4">
-                                        {#each game.playerGroups as playerGroup}
-                                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
-                                                <!-- Player Header -->
-                                                <div class="flex items-center justify-between mb-3">
-                                                    <h4 class="text-lg font-bold text-slate-100">{playerGroup.playerName}</h4>
-                                                    <span class="px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
-                                                        {formatPropType(playerGroup.propType)}
-                                                    </span>
-                                                </div>
-
-                                                <!-- Alt Lines Table -->
-                                                <div class="overflow-x-auto">
-                                                    <table class="w-full">
-                                                        <thead class="text-xs text-slate-400 border-b border-slate-700">
-                                                            <tr>
-                                                                <th class="text-left py-2 px-3">Line</th>
-                                                                <th class="text-center py-2 px-3">Odds</th>
-                                                                <th class="text-center py-2 px-3"></th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody class="divide-y divide-slate-700/50">
-                                                            {#each playerGroup.lines as line}
-                                                                <tr class="hover:bg-slate-900/50 transition-colors">
-                                                                    <td class="py-2 px-3">
-                                                                        <span class="font-semibold text-slate-100">
-                                                                            Over {line.line}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td class="py-2 px-3 text-center">
-                                                                        {#if line.odds}
-                                                                            <span class="font-bold text-lg {line.odds.overOdds > 0 ? 'text-success' : 'text-slate-300'}">
-                                                                                {formatOdds(line.odds.overOdds)}
-                                                                            </span>
-                                                                        {:else}
-                                                                            <span class="text-slate-500">N/A</span>
-                                                                        {/if}
-                                                                    </td>
-                                                                    <td class="py-2 px-3 text-center">
-                                                                        {#if line.odds && line.odds.overOdds !== null}
-                                                                            <button
-                                                                                on:click={() => openBetSlip({
-                                                                                    id: line.id,
-                                                                                    playerName: playerGroup.playerName,
-                                                                                    propType: playerGroup.propType,
-                                                                                    line: line.line,
-                                                                                    game: playerGroup.game
-                                                                                }, 'over', {
-                                                                                    sportsbook: line.odds.sportsbook.name,
-                                                                                    overOdds: line.odds.overOdds
-                                                                                })}
-                                                                                class="px-4 py-1 bg-primary hover:bg-primary-dark text-white rounded font-semibold text-sm transition-all"
-                                                                            >
-                                                                                Bet
-                                                                            </button>
-                                                                        {/if}
-                                                                    </td>
-                                                                </tr>
-                                                            {/each}
-                                                        </tbody>
-                                                    </table>
                                                 </div>
                                             </div>
                                         {/each}

@@ -66,9 +66,18 @@
         fetchingOddsAPI = true;
         propFetchResult = 'Fetching Odds API props...';
         try {
-            const response = await fetch('/api/test-props');
-            const text = await response.text();
-            propFetchResult = `✓ Odds API props fetched!\n\n${text}`;
+            const response = await fetch('/api/admin/fetch-odds-props', { method: 'POST' });
+            const data = await response.json();
+
+            if (data.success) {
+                propFetchResult = `Odds API props fetched!\n\nGames processed: ${data.gamesProcessed}/${data.totalGames}\nTotal props saved: ${data.totalPropsSaved}`;
+                if (data.errors && data.errors.length > 0) {
+                    propFetchResult += `\n\nErrors:\n${data.errors.join('\n')}`
+                }
+            } else {
+                propFetchResult = `Error: ${data.error}`;
+            }
+
         } catch (error) {
             propFetchResult = `Error: ${error}`;
         } finally {

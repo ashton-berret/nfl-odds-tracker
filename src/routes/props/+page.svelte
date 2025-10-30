@@ -1,124 +1,137 @@
 <script lang="ts">
-    import type { Prop } from '$lib/types';
-
-    export let data: {
-        props: Prop[];
-        count: number;
-        error?: string;
-    };
+    export let data;
 
     // User comes from parent layout
     import { page } from '$app/stores';
     $: user = $page.data.user;
 
-    let showBetSlip = false;
-    let selectedProp: any = null;
-    let selectedSide: 'over' | 'under' = 'over';
-    let selectedSportsbook: any = null;
-    let betAmount = 100;
-    let placing = false;
-    let errorMessage = '';
-
-    // Expandable rows state
-    let expandedPropId: number | null = null;
+    let activeTab: 'consensus' | 'draftkings' = 'consensus';
 
     // Filter states
     let searchQuery = '';
-    let selectedTeam = 'all';
-    let selectedPropType = 'all';
 
-    // Get unique teams and prop types for filters
-    $: teams = ['all', ...new Set(data.props.flatMap((p: any) => [p.game.homeTeam, p.game.awayTeam]))];
-    $: propTypes = ['all', ...new Set(data.props.map((p: any) => p.propType))];
+    // Expandable game state
+    let expandedGames = new Set<string>();
 
-    // Filtered props
-    $: filteredProps = data.props.filter((prop: any) => {
-        if (searchQuery && !prop.playerName.toLowerCase().includes(searchQuery.toLowerCase())) {
-            return false;
+    /**
+     * Normalize player names for fuzzy matching
+     */
+    function normalizePlayerName(name: string): string {
+        return name
+            .toLowerCase()
+            .replace(/['\-\.]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    /**
+     * Toggle game expansion
+     */
+    function toggleGame(gameId: string) {
+        if (expandedGames.has(gameId)) {
+            expandedGames.delete(gameId);
+        } else {
+            expandedGames.add(gameId);
         }
-        if (selectedTeam !== 'all') {
-            if (prop.game.homeTeam !== selectedTeam && prop.game.awayTeam !== selectedTeam) {
+        expandedGames = expandedGames;
+    }
+
+    /**
+     * Expand all games
+     */
+    function expandAll() {
+        if (activeTab === 'consensus') {
+            expandedGames = new Set(groupedOddsApiProps.map(g => g.gameId));
+        } else {
+            expandedGames = new Set(groupedDKProps.map(g => g.gameId));
+        }
+    }
+
+    /**
+     * Collapse all games
+     */
+    function collapseAll() {
+        expandedGames = new Set();
+    }
+
+    // Filtered Odds API props with fuzzy name matching
+    $: filteredOddsApiProps = data.oddsApiProps.filter((prop: any) => {
+        if (searchQuery) {
+            const normalizedSearch = normalizePlayerName(searchQuery);
+            const normalizedPlayer = normalizePlayerName(prop.playerName);
+            if (!normalizedPlayer.includes(normalizedSearch)) {
                 return false;
             }
-        }
-        if (selectedPropType !== 'all' && prop.propType !== selectedPropType) {
-            return false;
         }
         return true;
     });
 
-    function toggleExpand(propId: number) {
-        console.log('[PROPS PAGE] Toggling expand for prop:', propId);
-        expandedPropId = expandedPropId === propId ? null : propId;
-    }
-
-    function openBetSlip(prop: any, side: 'over' | 'under', sportsbook: any) {
-        console.log('[PROPS PAGE] Opening bet slip:', { prop: prop.playerName, side, sportsbook: sportsbook.sportsbook });
-
-        if (!user) {
-            alert('Please log in to place bets');
-            return;
-        }
-
-        selectedProp = prop;
-        selectedSide = side;
-        selectedSportsbook = sportsbook;
-        showBetSlip = true;
-        errorMessage = '';
-    }
-
-    async function placeBet() {
-        if (!selectedProp || !selectedSportsbook || !user) return;
-
-        console.log('[PROPS PAGE] Placing bet...', {
-            prop: selectedProp.playerName,
-            side: selectedSide,
-            amount: betAmount,
-            sportsbook: selectedSportsbook.sportsbook
-        });
-
-        placing = true;
-        errorMessage = '';
-
-        try {
-            const odds = selectedSide === 'over'
-                ? selectedSportsbook.overOdds
-                : selectedSportsbook.underOdds;
-
-            const sportsbookResponse = await fetch(`/api/sportsbooks?name=${encodeURIComponent(selectedSportsbook.sportsbook)}`);
-            const sportsbookData = await sportsbookResponse.json();
-
-            console.log('[PROPS PAGE] Sportsbook ID:', sportsbookData.id);
-
-            const response = await fetch('/api/bets/place', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    propId: selectedProp.id,
-                    sportsbookId: sportsbookData.id,
-                    side: selectedSide,
-                    amount: betAmount,
-                    odds: odds
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                console.log('[PROPS PAGE] Bet placed successfully! New balance:', result.newBalance);
-                showBetSlip = false;
-                alert('Bet placed successfully!');
-                window.location.reload();
-            } else {
-                console.error('[PROPS PAGE] Bet placement failed:', result.error);
-                errorMessage = result.error;
+    // Filtered DK props with fuzzy name matching
+    $: filteredDKProps = data.dkProps.filter((playerGroup: any) => {
+        if (searchQuery) {
+            const normalizedSearch = normalizePlayerName(searchQuery);
+            const normalizedPlayer = normalizePlayerName(playerGroup.playerName);
+            if (!normalizedPlayer.includes(normalizedSearch)) {
+                return false;
             }
-        } catch (error) {
-            console.error('[PROPS PAGE] Error placing bet:', error);
-            errorMessage = 'Failed to place bet';
-        } finally {
-            placing = false;
         }
+        return true;
+    });
+
+    // Group Odds API props by game
+    $: groupedOddsApiProps = (() => {
+        const grouped = new Map();
+
+        for (const prop of filteredOddsApiProps) {
+            const gameId = prop.game.id;
+            if (!grouped.has(gameId)) {
+                grouped.set(gameId, {
+                    gameId: gameId,
+                    awayTeam: prop.game.awayTeam,
+                    homeTeam: prop.game.homeTeam,
+                    commenceTime: prop.game.commenceTime,
+                    props: []
+                });
+            }
+            grouped.get(gameId).props.push(prop);
+        }
+
+        return Array.from(grouped.values()).sort((a, b) =>
+            new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime()
+        );
+    })();
+
+    // Group DK props by game
+    $: groupedDKProps = (() => {
+        const grouped = new Map();
+
+        for (const playerGroup of filteredDKProps) {
+            const gameId = playerGroup.game.id;
+            if (!grouped.has(gameId)) {
+                grouped.set(gameId, {
+                    gameId: gameId,
+                    awayTeam: playerGroup.game.awayTeam,
+                    homeTeam: playerGroup.game.homeTeam,
+                    commenceTime: playerGroup.game.commenceTime,
+                    playerGroups: []
+                });
+            }
+            grouped.get(gameId).playerGroups.push(playerGroup);
+        }
+
+        return Array.from(grouped.values()).sort((a, b) =>
+            new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime()
+        );
+    })();
+
+    function formatOdds(odds: number | null | undefined): string {
+        if (odds === null || odds === undefined) {
+            return 'N/A';
+        }
+        if (odds > 0) {
+            return `+${odds}`;
+        }
+        return odds.toString();
     }
 
     function formatPropType(propType: string): string {
@@ -128,276 +141,248 @@
             .replace(/\b\w/g, (l) => l.toUpperCase());
     }
 
-    function formatOdds(odds: number): string {
-        return odds > 0 ? `+${odds}` : odds.toString();
-    }
-
-    function calculatePayout(amount: number, odds: number): number {
-        if (odds > 0) {
-            return amount + (amount * odds / 100);
-        } else {
-            return amount + (amount * 100 / Math.abs(odds));
-        }
+    function formatDate(dateString: string): string {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
     }
 </script>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-8">
         <h1 class="text-4xl font-bold text-slate-100 mb-2">NFL Player Props</h1>
-        <p class="text-slate-400 text-lg">Compare odds across sportsbooks and place your bets</p>
+        <p class="text-slate-400 text-lg">Compare odds and explore alternate lines</p>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 p-6 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <!-- Search -->
-            <div>
-                <label for="search" class="block text-sm font-semibold text-slate-300 mb-2">
-                    Search Player
-                </label>
-                <input
-                    id="search"
-                    type="text"
-                    bind:value={searchQuery}
-                    placeholder="e.g., Patrick Mahomes"
-                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-slate-500"
-                />
-            </div>
-
-            <!-- Team Filter -->
-            <div>
-                <label for="team" class="block text-sm font-semibold text-slate-300 mb-2">
-                    Team
-                </label>
-                <select
-                    id="team"
-                    bind:value={selectedTeam}
-                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                    {#each teams as team}
-                        <option value={team}>
-                            {team === 'all' ? 'All Teams' : team}
-                        </option>
-                    {/each}
-                </select>
-            </div>
-
-            <!-- Prop Type Filter -->
-            <div>
-                <label for="propType" class="block text-sm font-semibold text-slate-300 mb-2">
-                    Prop Type
-                </label>
-                <select
-                    id="propType"
-                    bind:value={selectedPropType}
-                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                    {#each propTypes as type}
-                        <option value={type}>
-                            {type === 'all' ? 'All Types' : formatPropType(type)}
-                        </option>
-                    {/each}
-                </select>
-            </div>
-        </div>
-
-        <div class="mt-4 text-sm text-slate-400 font-medium">
-            Showing {filteredProps.length} of {data.count} props
+    <!-- Search Bar + Controls -->
+    <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 p-4 mb-6">
+        <div class="flex gap-3">
+            <input
+                type="text"
+                bind:value={searchQuery}
+                placeholder="Search player name..."
+                class="flex-1 bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-slate-500"
+            />
+            <button
+                on:click={expandAll}
+                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg font-semibold transition-colors"
+            >
+                Expand All
+            </button>
+            <button
+                on:click={collapseAll}
+                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg font-semibold transition-colors"
+            >
+                Collapse All
+            </button>
         </div>
     </div>
 
-    <!-- Props Table -->
-    {#if filteredProps.length === 0}
-        <div class="bg-warning/10 border border-warning/30 text-warning px-6 py-4 rounded-lg">
-            {#if data.count === 0}
-                No props available. Visit <a href="/api/test-props" class="underline font-semibold">fetch props endpoint</a> to load data.
-            {:else}
-                No props match your filters. Try adjusting your search criteria.
-            {/if}
+    <!-- Tabs -->
+    <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 mb-6">
+        <div class="flex border-b border-slate-700">
+            <button
+                on:click={() => activeTab = 'consensus'}
+                class="flex-1 px-6 py-4 text-center font-semibold transition-all {activeTab === 'consensus'
+                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/30'}"
+            >
+                <div class="text-lg">Market Consensus</div>
+                <div class="text-xs mt-1 opacity-75">
+                    Compare 6+ sportsbooks • {groupedOddsApiProps.length} games
+                </div>
+            </button>
+            <button
+                on:click={() => activeTab = 'draftkings'}
+                class="flex-1 px-6 py-4 text-center font-semibold transition-all {activeTab === 'draftkings'
+                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/30'}"
+            >
+                <div class="text-lg">DraftKings Alt Lines</div>
+                <div class="text-xs mt-1 opacity-75">
+                    Explore alternate spreads • {groupedDKProps.length} games
+                </div>
+            </button>
         </div>
-    {:else}
-        <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 overflow-hidden">
-            <table class="min-w-full">
-                <thead class="bg-slate-900/50 border-b border-slate-700">
-                    <tr>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider w-48">Player</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider w-60">Game</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-300 uppercase tracking-wider w-40">Prop</th>
-                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-24">Line</th>
-                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-32">Best Over</th>
-                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-32">Best Under</th>
-                        <th class="px-6 py-4 text-center text-xs font-bold text-slate-300 uppercase tracking-wider w-28"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-700/50">
-                    {#each filteredProps as prop}
-                        <!-- Main Row -->
-                        <tr class="hover:bg-slate-700/30 transition-colors">
-                            <td class="px-6 py-4">
-                                <div class="font-semibold text-slate-100 text-lg">{prop.playerName}</div>
-                            </td>
-                            <td class="px-6 py-4 w-40">
-                                <div class="text-sm text-slate-300 font-medium">{prop.game.awayTeam}</div>
-                                <div class="text-xs text-slate-300 my-0.5">@</div>
-                                <div class="text-sm text-slate-300 font-medium">{prop.game.homeTeam}</div>
-                                <div class="text-xs text-slate-500 mt-1">
-                                    {new Date(prop.game.commenceTime).toLocaleDateString()}
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 w-40">
-                                <span class="px-3 py-1.5 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
-                                    {formatPropType(prop.propType)}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <div class="text-2xl font-bold text-slate-100">{prop.line}</div>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <button
-                                    on:click={() => {
-                                        const bestBook = prop.allOdds.reduce((best: any, current: any) =>
-                                            current.overOdds > best.overOdds ? current : best
-                                        );
-                                        openBetSlip(prop, 'over', bestBook);
-                                    }}
-                                    class="odds-btn odds-btn-over w-28"
-                                >
-                                    <div class="text-lg font-bold">{formatOdds(prop.bestOverOdds)}</div>
-                                    <div class="text-xs mt-0.5 opacity-75">{prop.bestOverSportsbook}</div>
-                                </button>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <button
-                                    on:click={() => {
-                                        const bestBook = prop.allOdds.reduce((best: any, current: any) =>
-                                            current.underOdds > best.underOdds ? current : best
-                                        );
-                                        openBetSlip(prop, 'under', bestBook);
-                                    }}
-                                    class="odds-btn odds-btn-under w-28"
-                                >
-                                    <div class="text-lg font-bold">{formatOdds(prop.bestUnderOdds)}</div>
-                                    <div class="text-xs mt-0.5 opacity-75">{prop.bestUnderSportsbook}</div>
-                                </button>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <button
-                                    on:click={() => toggleExpand(prop.id)}
-                                    class="px-4 py-2 text-sm font-semibold text-primary hover:text-primary-light hover:bg-primary/10 rounded-lg transition-all"
-                                >
-                                    {expandedPropId === prop.id ? '▼ Hide All' : '► All Books'}
-                                </button>
-                            </td>
-                        </tr>
 
-                        <!-- Expanded Details Row -->
-                        {#if expandedPropId === prop.id}
-                            <tr class="bg-slate-900/50">
-                                <td colspan="7" class="px-6 py-6">
-                                    <div class="text-sm font-bold text-slate-300 mb-4">All Sportsbooks</div>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {#each prop.allOdds as bookOdds}
-                                            <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-slate-600 transition-colors">
-                                                <div class="font-bold text-slate-100 mb-3 text-center">{bookOdds.sportsbook}</div>
-                                                <div class="flex gap-2">
-                                                    <button
-                                                        on:click={() => openBetSlip(prop, 'over', bookOdds)}
-                                                        class="flex-1 bg-success/10 hover:bg-success/20 border-2 border-success/30 hover:border-success/50 rounded-lg px-3 py-3 transition-all hover:scale-105"
-                                                    >
-                                                        <div class="text-xs text-success/70 mb-1">Over</div>
-                                                        <div class="font-bold text-success text-lg">{formatOdds(bookOdds.overOdds)}</div>
-                                                    </button>
-                                                    <button
-                                                        on:click={() => openBetSlip(prop, 'under', bookOdds)}
-                                                        class="flex-1 bg-danger/10 hover:bg-danger/20 border-2 border-danger/30 hover:border-danger/50 rounded-lg px-3 py-3 transition-all hover:scale-105"
-                                                    >
-                                                        <div class="text-xs text-danger/70 mb-1">Under</div>
-                                                        <div class="font-bold text-danger text-lg">{formatOdds(bookOdds.underOdds)}</div>
-                                                    </button>
+        <!-- Tab Content -->
+        <div class="p-6">
+            {#if activeTab === 'consensus'}
+                <!-- Market Consensus View - Grouped by Game -->
+                <div class="space-y-4">
+                    {#if groupedOddsApiProps.length === 0}
+                        <div class="text-center py-12">
+                            {#if data.oddsApiProps.length === 0}
+                                <p class="text-slate-400 mb-4">No market consensus data available.</p>
+                                <a href="/api/test-props" class="text-primary underline font-semibold">Fetch Odds API props</a>
+                            {:else}
+                                <p class="text-slate-400">No props match your search.</p>
+                            {/if}
+                        </div>
+                    {:else}
+                        {#each groupedOddsApiProps as game}
+                            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                <!-- Game Header (Collapsible) -->
+                                <button
+                                    on:click={() => toggleGame(game.gameId)}
+                                    class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+                                >
+                                    <div class="text-left">
+                                        <h3 class="text-xl font-bold text-slate-100">
+                                            {game.awayTeam} @ {game.homeTeam}
+                                        </h3>
+                                        <p class="text-sm text-slate-400 mt-1">
+                                            {formatDate(game.commenceTime)} • {game.props.length} props
+                                        </p>
+                                    </div>
+                                    <div class="text-slate-400 text-xl">
+                                        {expandedGames.has(game.gameId) ? '▼' : '▶'}
+                                    </div>
+                                </button>
+
+                                <!-- Game Props (Collapsible) -->
+                                {#if expandedGames.has(game.gameId)}
+                                    <div class="border-t border-slate-700 p-6 space-y-4">
+                                        {#each game.props as prop}
+                                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
+                                                <!-- Player Header -->
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <div>
+                                                        <h4 class="text-lg font-bold text-slate-100">{prop.playerName}</h4>
+                                                    </div>
+                                                    <div class="text-right">
+                                                        <span class="px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
+                                                            {formatPropType(prop.propType)}
+                                                        </span>
+                                                        <div class="text-xl font-bold text-slate-100 mt-2">
+                                                            O/U {prop.line}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Sportsbooks Grid -->
+                                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                    {#each prop.allOdds as odds}
+                                                        <div class="bg-slate-900 border border-slate-600 rounded p-2">
+                                                            <div class="text-xs font-semibold text-slate-400 mb-2 text-center truncate">
+                                                                {odds.sportsbook}
+                                                            </div>
+                                                            <div class="flex gap-2">
+                                                                <div class="flex-1 text-center">
+                                                                    <div class="text-xs text-slate-500 mb-1">O</div>
+                                                                    <div class="text-sm font-bold text-success">
+                                                                        {formatOdds(odds.overOdds)}
+                                                                    </div>
+                                                                </div>
+                                                                <div class="flex-1 text-center">
+                                                                    <div class="text-xs text-slate-500 mb-1">U</div>
+                                                                    <div class="text-sm font-bold text-danger">
+                                                                        {formatOdds(odds.underOdds)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    {/each}
                                                 </div>
                                             </div>
                                         {/each}
                                     </div>
-                                </td>
-                            </tr>
-                        {/if}
-                    {/each}
-                </tbody>
-            </table>
-        </div>
-    {/if}
-</div>
-
-<!-- Bet Slip Modal -->
-{#if showBetSlip && selectedProp}
-    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
-            <h2 class="text-2xl font-bold text-slate-100 mb-6">Place Bet</h2>
-
-            <div class="mb-6 p-4 bg-slate-900 rounded-lg border border-slate-700">
-                <div class="font-bold text-slate-100 text-lg">{selectedProp.playerName}</div>
-                <div class="text-sm text-slate-300 mt-2">
-                    {formatPropType(selectedProp.propType)} {selectedSide === 'over' ? 'Over' : 'Under'} {selectedProp.line}
+                                {/if}
+                            </div>
+                        {/each}
+                    {/if}
                 </div>
-                <div class="text-sm text-slate-400 mt-1">
-                    {selectedProp.game.awayTeam} @ {selectedProp.game.homeTeam}
-                </div>
-            </div>
+            {:else}
+                <!-- DraftKings Alt Lines View - Grouped by Game -->
+                <div class="space-y-4">
+                    {#if groupedDKProps.length === 0}
+                        <div class="text-center py-12">
+                            {#if data.dkProps.length === 0}
+                                <p class="text-slate-400 mb-4">No DraftKings data available.</p>
+                                <a href="/api/test-dk-save" class="text-primary underline font-semibold">Fetch DK props</a>
+                            {:else}
+                                <p class="text-slate-400">No props match your search.</p>
+                            {/if}
+                        </div>
+                    {:else}
+                        {#each groupedDKProps as game}
+                            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                <!-- Game Header (Collapsible) -->
+                                <button
+                                    on:click={() => toggleGame(game.gameId)}
+                                    class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+                                >
+                                    <div class="text-left">
+                                        <h3 class="text-xl font-bold text-slate-100">
+                                            {game.awayTeam} @ {game.homeTeam}
+                                        </h3>
+                                        <p class="text-sm text-slate-400 mt-1">
+                                            {formatDate(game.commenceTime)} • {game.playerGroups.length} players
+                                        </p>
+                                    </div>
+                                    <div class="text-slate-400 text-xl">
+                                        {expandedGames.has(game.gameId) ? '▼' : '▶'}
+                                    </div>
+                                </button>
 
-            <div class="mb-4">
-                <div class="block text-sm font-semibold text-slate-300 mb-2">Sportsbook</div>
-                <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-slate-100 font-medium">
-                    {selectedSportsbook.sportsbook}
-                </div>
-            </div>
+                                <!-- Game Props (Collapsible) -->
+                                {#if expandedGames.has(game.gameId)}
+                                    <div class="border-t border-slate-700 p-6 space-y-4">
+                                        {#each game.playerGroups as playerGroup}
+                                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
+                                                <!-- Player Header -->
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <h4 class="text-lg font-bold text-slate-100">{playerGroup.playerName}</h4>
+                                                    <span class="px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
+                                                        {formatPropType(playerGroup.propType)}
+                                                    </span>
+                                                </div>
 
-            <div class="mb-4">
-                <div class="block text-sm font-semibold text-slate-300 mb-2">Odds</div>
-                <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 font-bold text-primary text-lg">
-                    {formatOdds(selectedSide === 'over' ? selectedSportsbook.overOdds : selectedSportsbook.underOdds)}
-                </div>
-            </div>
-
-            <div class="mb-6">
-                <label for="bet-amount" class="block text-sm font-semibold text-slate-300 mb-2">Bet Amount ($)</label>
-                <input
-                    id="bet-amount"
-                    type="number"
-                    bind:value={betAmount}
-                    min="1"
-                    max={user?.balance || 0}
-                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-3 text-lg font-semibold focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-            </div>
-
-            <div class="mb-6 p-4 bg-gradient-to-r from-success/10 to-success/5 rounded-lg border border-success/30">
-                <div class="text-sm text-slate-400 mb-1">Potential Payout</div>
-                <div class="text-2xl font-bold text-success">
-                    ${calculatePayout(betAmount, selectedSide === 'over' ? selectedSportsbook.overOdds : selectedSportsbook.underOdds).toFixed(2)}
-                </div>
-            </div>
-
-            {#if errorMessage}
-                <div class="mb-4 p-4 bg-danger/10 text-danger rounded-lg border border-danger/30">
-                    {errorMessage}
+                                                <!-- Alt Lines Table -->
+                                                <div class="overflow-x-auto">
+                                                    <table class="w-full">
+                                                        <thead class="text-xs text-slate-400 border-b border-slate-700">
+                                                            <tr>
+                                                                <th class="text-left py-2 px-3">Line</th>
+                                                                <th class="text-center py-2 px-3">Odds</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-slate-700/50">
+                                                            {#each playerGroup.lines as line}
+                                                                <tr class="hover:bg-slate-900/50 transition-colors">
+                                                                    <td class="py-2 px-3">
+                                                                        <span class="font-semibold text-slate-100">
+                                                                            Over {line.line}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td class="py-2 px-3 text-center">
+                                                                        {#if line.odds}
+                                                                            <span class="font-bold text-lg {line.odds.overOdds > 0 ? 'text-success' : 'text-slate-300'}">
+                                                                                {formatOdds(line.odds.overOdds)}
+                                                                            </span>
+                                                                        {:else}
+                                                                            <span class="text-slate-500">N/A</span>
+                                                                        {/if}
+                                                                    </td>
+                                                                </tr>
+                                                            {/each}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                        {/each}
+                    {/if}
                 </div>
             {/if}
-
-            <div class="flex gap-3">
-                <button
-                    on:click={placeBet}
-                    disabled={placing}
-                    class="flex-1 bg-gradient-to-r from-success to-success-dark text-white px-6 py-3 rounded-lg font-bold hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                >
-                    {placing ? 'Placing...' : 'Place Bet'}
-                </button>
-                <button
-                    on:click={() => showBetSlip = false}
-                    class="flex-1 bg-slate-700 border border-slate-600 text-slate-100 px-6 py-3 rounded-lg font-semibold hover:bg-slate-600 transition-all"
-                >
-                    Cancel
-                </button>
-            </div>
         </div>
     </div>
-{/if}
+</div>

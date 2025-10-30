@@ -52,7 +52,7 @@ model Game {
   externalId    String?  @unique  // ID from odds API
   homeTeamId    String
   awayTeamId    String
-  commenceTime   DateTime
+  commenceTime  DateTime
   completed     Boolean  @default(false)
   homeScore     Int?
   awayScore     Int?
@@ -105,6 +105,7 @@ model PlayerProp {
     playerId      String
     propType      String   // "rushing_yds", "anytime_td", "first_td", etc.
     line          Float?   // Now nullable - TD props have no line
+    source        String   @default("theoddsapi")
     createdAt     DateTime @default(now())
 
     game          Game       @relation(fields: [gameId], references: [id])

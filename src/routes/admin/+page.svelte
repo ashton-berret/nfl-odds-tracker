@@ -6,6 +6,14 @@
     let settlementResult: any = null;
     let settlementError = '';
 
+    // NEW: Prop fetching state
+    let fetchingOddsAPI = false;
+    let fetchingDKRushing = false;
+    let fetchingDKReceiving = false;
+    let fetchingDKPassing = false;
+    let fetchingDKTouchdown = false;
+    let propFetchResult = '';
+
     async function syncRosters() {
         syncing = true;
         syncResult = 'Syncing...';
@@ -50,6 +58,49 @@
             console.error('[Admin] Network error:', err);
         } finally {
             settling = false;
+        }
+    }
+
+    // NEW: Fetch Odds API props
+    async function fetchOddsAPIProps() {
+        fetchingOddsAPI = true;
+        propFetchResult = 'Fetching Odds API props...';
+        try {
+            const response = await fetch('/api/test-props');
+            const text = await response.text();
+            propFetchResult = `✓ Odds API props fetched!\n\n${text}`;
+        } catch (error) {
+            propFetchResult = `Error: ${error}`;
+        } finally {
+            fetchingOddsAPI = false;
+        }
+    }
+
+    // NEW: Fetch DraftKings props by type
+    async function fetchDKProps(propType: 'rushing' | 'receiving' | 'passing' | 'touchdown') {
+        const stateMap = {
+            rushing: () => fetchingDKRushing = true,
+            receiving: () => fetchingDKReceiving = true,
+            passing: () => fetchingDKPassing = true,
+            touchdown: () => fetchingDKTouchdown = true,
+        };
+
+        stateMap[propType]();
+        propFetchResult = `Fetching DraftKings ${propType} props...`;
+
+        try {
+            const response = await fetch(`/api/admin/fetch-dk-props?type=${propType}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            propFetchResult = `✓ DraftKings ${propType} props fetched!\n\n${JSON.stringify(data, null, 2)}`;
+        } catch (error) {
+            propFetchResult = `Error: ${error}`;
+        } finally {
+            fetchingDKRushing = false;
+            fetchingDKReceiving = false;
+            fetchingDKPassing = false;
+            fetchingDKTouchdown = false;
         }
     }
 </script>
@@ -151,12 +202,74 @@
         </div>
     </div>
 
+    <!-- NEW: Props Fetching Section -->
+    <div class="mt-6 bg-slate-800 border border-slate-700 rounded-xl p-6">
+        <h2 class="text-2xl font-bold text-slate-100 mb-4">📊 Fetch Props Data</h2>
+        <p class="text-slate-400 mb-6">
+            Fetch props from various sources for the current week's games.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <!-- Odds API Button -->
+            <button
+                on:click={fetchOddsAPIProps}
+                disabled={fetchingOddsAPI}
+                class="px-6 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-lg font-bold hover:shadow-glow-md transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {fetchingOddsAPI ? 'Fetching...' : 'Odds API (All Props)'}
+            </button>
+
+            <!-- DraftKings Rushing -->
+            <button
+                on:click={() => fetchDKProps('rushing')}
+                disabled={fetchingDKRushing}
+                class="px-6 py-3 bg-gradient-to-r from-success to-success-dark text-white rounded-lg font-bold hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {fetchingDKRushing ? 'Fetching...' : 'DK Rushing'}
+            </button>
+
+            <!-- DraftKings Receiving -->
+            <button
+                on:click={() => fetchDKProps('receiving')}
+                disabled={fetchingDKReceiving}
+                class="px-6 py-3 bg-gradient-to-r from-warning to-orange-600 text-white rounded-lg font-bold hover:shadow-glow-md transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {fetchingDKReceiving ? 'Fetching...' : 'DK Receiving'}
+            </button>
+
+            <!-- DraftKings Passing -->
+            <button
+                on:click={() => fetchDKProps('passing')}
+                disabled={fetchingDKPassing}
+                class="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg font-bold hover:shadow-glow-md transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {fetchingDKPassing ? 'Fetching...' : 'DK Passing'}
+            </button>
+
+            <!-- DraftKings Touchdown -->
+            <button
+                on:click={() => fetchDKProps('touchdown')}
+                disabled={fetchingDKTouchdown}
+                class="px-6 py-3 bg-gradient-to-r from-green-600 to-purple-800 text-white rounded-lg font-bold hover:shadow-glow-md transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {fetchingDKTouchdown ? 'Fetching...' : 'DK Touchdown'}
+            </button>
+        </div>
+
+        {#if propFetchResult}
+            <div class="p-4 bg-slate-900 border border-slate-700 rounded-lg overflow-auto max-h-96">
+                <pre class="text-xs text-slate-300 font-mono whitespace-pre-wrap">{propFetchResult}</pre>
+            </div>
+        {/if}
+    </div>
+
     <!-- Instructions -->
     <div class="mt-8 bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         <h3 class="text-lg font-bold text-slate-100 mb-3">ℹ️ Admin Instructions</h3>
         <ul class="text-slate-400 space-y-2 text-sm">
             <li><strong class="text-slate-300">Bet Settlement:</strong> Automatically fetches game results from ESPN and settles all pending bets for completed games.</li>
             <li><strong class="text-slate-300">Roster Sync:</strong> Updates player-team mappings from ESPN. Run this when rosters change (trades, injuries, new season).</li>
+            <li><strong class="text-slate-300">Props Fetching:</strong> Fetch current week's props from Odds API (all prop types) or DraftKings (specific prop types).</li>
             <li><strong class="text-slate-300">Console Logs:</strong> Check your browser console (F12) for detailed logs during operations.</li>
         </ul>
     </div>

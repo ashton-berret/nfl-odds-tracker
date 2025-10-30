@@ -404,6 +404,7 @@ async function findPlayerInfo(playerName: string, homeTeam: { id: string; name: 
  * Normalize DraftKings team names to match Odds API/ESPN format
  * DK: "MIA Dolphins" → "Miami Dolphins"
  * DK: "BAL Ravens" → "Baltimore Ravens"
+ * DK: "LA Chargers" → "Los Angeles Chargers"
  */
 function normalizeDKTeamName(dkTeamName: string): string {
     // map of DK abbreviations to full city names
@@ -424,15 +425,17 @@ function normalizeDKTeamName(dkTeamName: string): string {
         'IND': 'Indianapolis',
         'JAX': 'Jacksonville',
         'KC': 'Kansas City',
-        'LAC': 'Los Angeles',  // Chargers
-        'LAR': 'Los Angeles',  // Rams
+        'LA': 'Los Angeles',    // DK uses "LA" for both Chargers and Rams
+        'LAC': 'Los Angeles',
+        'LAR': 'Los Angeles',
         'LV': 'Las Vegas',
         'MIA': 'Miami',
         'MIN': 'Minnesota',
         'NE': 'New England',
         'NO': 'New Orleans',
-        'NYG': 'New York',     // Giants
-        'NYJ': 'New York',     // Jets
+        'NY': 'New York',
+        'NYG': 'New York',
+        'NYJ': 'New York',
         'PHI': 'Philadelphia',
         'PIT': 'Pittsburgh',
         'SEA': 'Seattle',
@@ -444,8 +447,7 @@ function normalizeDKTeamName(dkTeamName: string): string {
 
     // dK format: "MIA Dolphins" → extract "MIA" and "Dolphins"
     const parts = dkTeamName.split(' ');
-
-    if (parts.length >= 2 && parts[0].length <= 3) {
+    if (parts.length >= 2) {
         const abbr = parts[0];
         const mascot = parts.slice(1).join(' ');  // Handle multi-word mascots
 
@@ -461,4 +463,3 @@ function normalizeDKTeamName(dkTeamName: string): string {
     console.warn(`[PROPS REPO] Could not normalize DK team name: "${dkTeamName}"`);
     return dkTeamName;
 }
-

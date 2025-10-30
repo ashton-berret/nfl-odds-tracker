@@ -121,7 +121,7 @@ export class BetSettlementService {
 
         console.log('[BET SETTLEMENT] Found: ', pendingBets.length, 'pending bets for the game');
 
-        const settlements: SettlementResults[] = [];
+        const settlements: SettlementResult[] = [];
         for (const bet of pendingBets) {
             const playerName = bet.prop.player.name;
             const stats = this.statsFetcher.findPlayerStatsByName(playerStats, playerName);

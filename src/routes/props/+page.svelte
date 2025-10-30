@@ -10,6 +10,15 @@
     // Filter states
     let searchQuery = '';
 
+    // Bet slip state
+    let showBetSlip = false;
+    let selectedProp: any = null;
+    let selectedOdds: any = null;
+    let selectedSide: 'over' | 'under' = 'over';
+    let betAmount = 100;
+    let placing = false;
+    let errorMessage = '';
+
     // Expandable game state
     let expandedGames = new Set<string>();
 
@@ -52,6 +61,91 @@
      */
     function collapseAll() {
         expandedGames = new Set();
+    }
+
+    /**
+     * Open bet slip modal
+     */
+    function openBetSlip(prop: any, side: 'over' | 'under', odds: any) {
+        console.log('[PROPS PAGE] Opening bet slip:', { player: prop.playerName, side, odds });
+
+        if (!user) {
+            alert('Please log in to place bets');
+            return;
+        }
+
+        selectedProp = prop;
+        selectedSide = side;
+        selectedOdds = odds;
+        showBetSlip = true;
+        errorMessage = '';
+    }
+
+    /**
+     * Place bet
+     */
+    async function placeBet() {
+        if (!selectedProp || !selectedOdds || !user) return;
+
+        console.log('[PROPS PAGE] Placing bet...', {
+            prop: selectedProp.playerName || selectedProp.player?.name,
+            side: selectedSide,
+            amount: betAmount,
+            odds: selectedOdds
+        });
+
+        placing = true;
+        errorMessage = '';
+
+        try {
+            const oddsValue = selectedSide === 'over' ? selectedOdds.overOdds : selectedOdds.underOdds;
+
+            // Get sportsbook ID
+            const sportsbookResponse = await fetch(`/api/sportsbooks?name=${encodeURIComponent(selectedOdds.sportsbook)}`);
+            const sportsbookData = await sportsbookResponse.json();
+
+            console.log('[PROPS PAGE] Sportsbook ID:', sportsbookData.id);
+
+            const response = await fetch('/api/bets/place', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    propId: selectedProp.id,
+                    sportsbookId: sportsbookData.id,
+                    side: selectedSide,
+                    amount: betAmount,
+                    odds: oddsValue
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                console.log('[PROPS PAGE] Bet placed successfully! New balance:', result.newBalance);
+                showBetSlip = false;
+                alert('Bet placed successfully!');
+                window.location.reload();
+            } else {
+                console.error('[PROPS PAGE] Bet placement failed:', result.error);
+                errorMessage = result.error;
+            }
+        } catch (error) {
+            console.error('[PROPS PAGE] Error placing bet:', error);
+            errorMessage = 'Failed to place bet';
+        } finally {
+            placing = false;
+        }
+    }
+
+    /**
+     * Calculate potential payout
+     */
+    function calculatePayout(amount: number, odds: number): number {
+        if (odds > 0) {
+            return amount + (amount * odds / 100);
+        } else {
+            return amount + (amount * 100 / Math.abs(odds));
+        }
     }
 
     // Filtered Odds API props with fuzzy name matching
@@ -165,7 +259,7 @@
             <input
                 type="text"
                 bind:value={searchQuery}
-                placeholder="Search player name..."
+                placeholder="Search player name... (e.g., DeVon, De'Von, Derrick)"
                 class="flex-1 bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-primary focus:border-transparent placeholder-slate-500"
             />
             <button
@@ -273,18 +367,41 @@
                                                                 {odds.sportsbook}
                                                             </div>
                                                             <div class="flex gap-2">
-                                                                <div class="flex-1 text-center">
-                                                                    <div class="text-xs text-slate-500 mb-1">O</div>
-                                                                    <div class="text-sm font-bold text-success">
-                                                                        {formatOdds(odds.overOdds)}
+                                                                <!-- Over Button -->
+                                                                {#if odds.overOdds !== null && odds.overOdds !== undefined}
+                                                                    <button
+                                                                        on:click={() => openBetSlip(prop, 'over', odds)}
+                                                                        class="flex-1 text-center hover:bg-success/20 border border-success/30 hover:border-success/50 rounded p-1 transition-all hover:scale-105"
+                                                                    >
+                                                                        <div class="text-xs text-slate-500 mb-1">O</div>
+                                                                        <div class="text-sm font-bold text-success">
+                                                                            {formatOdds(odds.overOdds)}
+                                                                        </div>
+                                                                    </button>
+                                                                {:else}
+                                                                    <div class="flex-1 text-center bg-slate-700/30 border border-slate-600/30 rounded p-1">
+                                                                        <div class="text-xs text-slate-500 mb-1">O</div>
+                                                                        <div class="text-sm font-bold text-slate-500">N/A</div>
                                                                     </div>
-                                                                </div>
-                                                                <div class="flex-1 text-center">
-                                                                    <div class="text-xs text-slate-500 mb-1">U</div>
-                                                                    <div class="text-sm font-bold text-danger">
-                                                                        {formatOdds(odds.underOdds)}
+                                                                {/if}
+
+                                                                <!-- Under Button -->
+                                                                {#if odds.underOdds !== null && odds.underOdds !== undefined}
+                                                                    <button
+                                                                        on:click={() => openBetSlip(prop, 'under', odds)}
+                                                                        class="flex-1 text-center hover:bg-danger/20 border border-danger/30 hover:border-danger/50 rounded p-1 transition-all hover:scale-105"
+                                                                    >
+                                                                        <div class="text-xs text-slate-500 mb-1">U</div>
+                                                                        <div class="text-sm font-bold text-danger">
+                                                                            {formatOdds(odds.underOdds)}
+                                                                        </div>
+                                                                    </button>
+                                                                {:else}
+                                                                    <div class="flex-1 text-center bg-slate-700/30 border border-slate-600/30 rounded p-1">
+                                                                        <div class="text-xs text-slate-500 mb-1">U</div>
+                                                                        <div class="text-sm font-bold text-slate-500">N/A</div>
                                                                     </div>
-                                                                </div>
+                                                                {/if}
                                                             </div>
                                                         </div>
                                                     {/each}
@@ -350,6 +467,7 @@
                                                             <tr>
                                                                 <th class="text-left py-2 px-3">Line</th>
                                                                 <th class="text-center py-2 px-3">Odds</th>
+                                                                <th class="text-center py-2 px-3"></th>
                                                             </tr>
                                                         </thead>
                                                         <tbody class="divide-y divide-slate-700/50">
@@ -369,6 +487,25 @@
                                                                             <span class="text-slate-500">N/A</span>
                                                                         {/if}
                                                                     </td>
+                                                                    <td class="py-2 px-3 text-center">
+                                                                        {#if line.odds && line.odds.overOdds !== null}
+                                                                            <button
+                                                                                on:click={() => openBetSlip({
+                                                                                    id: line.id,
+                                                                                    playerName: playerGroup.playerName,
+                                                                                    propType: playerGroup.propType,
+                                                                                    line: line.line,
+                                                                                    game: playerGroup.game
+                                                                                }, 'over', {
+                                                                                    sportsbook: line.odds.sportsbook.name,
+                                                                                    overOdds: line.odds.overOdds
+                                                                                })}
+                                                                                class="px-4 py-1 bg-primary hover:bg-primary-dark text-white rounded font-semibold text-sm transition-all"
+                                                                            >
+                                                                                Bet
+                                                                            </button>
+                                                                        {/if}
+                                                                    </td>
                                                                 </tr>
                                                             {/each}
                                                         </tbody>
@@ -386,3 +523,77 @@
         </div>
     </div>
 </div>
+
+<!-- Bet Slip Modal -->
+{#if showBetSlip && selectedProp}
+    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h2 class="text-2xl font-bold text-slate-100 mb-6">Place Bet</h2>
+
+            <div class="mb-6 p-4 bg-slate-900 rounded-lg border border-slate-700">
+                <div class="font-bold text-slate-100 text-lg">{selectedProp.playerName}</div>
+                <div class="text-sm text-slate-300 mt-2">
+                    {formatPropType(selectedProp.propType)} {selectedSide === 'over' ? 'Over' : 'Under'} {selectedProp.line}
+                </div>
+                <div class="text-sm text-slate-400 mt-1">
+                    {selectedProp.game.awayTeam} @ {selectedProp.game.homeTeam}
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="block text-sm font-semibold text-slate-300 mb-2">Sportsbook</div>
+                <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-slate-100 font-medium">
+                    {selectedOdds.sportsbook}
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="block text-sm font-semibold text-slate-300 mb-2">Odds</div>
+                <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 font-bold text-primary text-lg">
+                    {formatOdds(selectedSide === 'over' ? selectedOdds.overOdds : selectedOdds.underOdds)}
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label for="bet-amount" class="block text-sm font-semibold text-slate-300 mb-2">Bet Amount ($)</label>
+                <input
+                    id="bet-amount"
+                    type="number"
+                    bind:value={betAmount}
+                    min="1"
+                    max={user?.balance || 0}
+                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-3 text-lg font-semibold focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+            </div>
+
+            <div class="mb-6 p-4 bg-gradient-to-r from-success/10 to-success/5 rounded-lg border border-success/30">
+                <div class="text-sm text-slate-400 mb-1">Potential Payout</div>
+                <div class="text-2xl font-bold text-success">
+                    ${calculatePayout(betAmount, selectedSide === 'over' ? selectedOdds.overOdds : selectedOdds.underOdds).toFixed(2)}
+                </div>
+            </div>
+
+            {#if errorMessage}
+                <div class="mb-4 p-4 bg-danger/10 text-danger rounded-lg border border-danger/30">
+                    {errorMessage}
+                </div>
+            {/if}
+
+            <div class="flex gap-3">
+                <button
+                    on:click={placeBet}
+                    disabled={placing}
+                    class="flex-1 bg-gradient-to-r from-success to-success-dark text-white px-6 py-3 rounded-lg font-bold hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                    {placing ? 'Placing...' : 'Place Bet'}
+                </button>
+                <button
+                    on:click={() => showBetSlip = false}
+                    class="flex-1 bg-slate-700 border border-slate-600 text-slate-100 px-6 py-3 rounded-lg font-semibold hover:bg-slate-600 transition-all"
+                >
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}

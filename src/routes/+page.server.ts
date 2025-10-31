@@ -48,14 +48,9 @@ export async function load({ locals }) {
             const lostBets = allBets.filter(b => b.status === 'lost').length;
             const pendingBets = allBets.filter(b => b.status === 'pending').length;
 
-            const totalProfit = allBets.reduce((sum, bet) => {
-                if (bet.status === 'won') {
-                    return sum + (bet.payout - bet.amount);
-                } else if (bet.status === 'lost') {
-                    return sum - bet.amount;
-                }
-                return sum;
-            }, 0);
+            const totalProfit = allBets
+                .filter((bet) => bet.profit !== null && bet.profit !== undefined)
+                .reduce((sum, bet) => sum + (bet.profit as number), 0);
 
             userStats = {
                 totalBets: allBets.length,
@@ -156,6 +151,7 @@ export async function load({ locals }) {
         console.log(`[DASHBOARD LOAD] Loaded ${recentBets.length} recent bets, ${processedHotProps.length} hot props`);
 
         return {
+            user: locals.user || null,
             recentBets,
             userStats,
             hotProps: processedHotProps
@@ -164,6 +160,7 @@ export async function load({ locals }) {
     } catch (error) {
         console.error('[DASHBOARD LOAD] Error:', error);
         return {
+            user: locals.user || null,
             recentBets: [],
             userStats: null,
             hotProps: []

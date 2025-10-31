@@ -103,7 +103,7 @@
             <div>
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-2xl font-bold text-slate-100">Recent Bets</h2>
-                    <a href="/bets" class="text-primary hover:text-primary-light font-semibold hover:underline">
+                    <a href="/my-bets" class="text-primary hover:text-primary-light font-semibold hover:underline">
                         View All →
                     </a>
                 </div>

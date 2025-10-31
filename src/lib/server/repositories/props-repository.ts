@@ -34,20 +34,34 @@ export async function savePlayerProps(gameExternalId: string, homeTeam: string, 
         console.log(`[PROPS REPO] Away team: ${awayTeamRecord.name} (ID: ${awayTeamRecord.id})`);
 
         // create or update the game
-        const gameRecord = await prisma.game.upsert({
-            where: { externalId: gameExternalId },
-            update: {
-                commenceTime: new Date(commenceTime)
-            },
-            create: {
-                externalId: gameExternalId,
+        console.log(`[PROPS REPO] Game: ${gameRecord.id}`);
+
+        // find existing game by matchup (teams + time) or create a new one
+        let gameRecord = await prisma.game.findFirst({
+            where: {
                 homeTeamId: homeTeamRecord.id,
                 awayTeamId: awayTeamRecord.id,
-                commenceTime: new Date(commenceTime),
-                completed: false
+                commenceTime: {
+                    gte: new Date(new Date(commenceTime).getTime() - 60 * 60 * 1000), // within 1 hour
+                    lte: new Date(new Date(commenceTime).getTime() + 60 * 60 * 1000)
+                }
             }
         });
-        console.log(`[PROPS REPO] Game: ${gameRecord.id}`);
+
+        if (!gameRecord) {
+            gameRecord = await prisma.game.create({
+                data: {
+                    externalId: gameExternalId,
+                    homeTeamId: homeTeamRecord.id,
+                    awayTeamId: awayTeamRecord.id,
+                    commenceTime: new Date(commenceTime),
+                    completed: false
+                }
+            });
+            console.log(`[PROPS REPO] Created new game: ${gameRecord.id}`);
+        } else {
+            console.log(`[PROPS REPO] Using existing game: ${gameRecord.id}`);
+        }
 
         // loop through each parsed prop and save it
         for (const prop of parsedProps) {
@@ -197,22 +211,32 @@ export async function saveDraftKingsProps(dkEventId: string, homeTeam: string, a
         // Create or update the game using EXISTING team IDs
         const gameExternalId = `dk_${dkEventId}`;
 
-        const gameRecord = await prisma.game.upsert({
-            where: { externalId: gameExternalId },
-            update: {
-                commenceTime: new Date(commenceTime)
-            },
-            create: {
-                externalId: gameExternalId,
+        let gameRecord = await prisma.game.findFirst({
+            where: {
                 homeTeamId: homeTeamRecord.id,
                 awayTeamId: awayTeamRecord.id,
-                commenceTime: new Date(commenceTime),
-                completed: false
+                commenceTime: {
+                    gte: new Date(new Date(commenceTime).getTime() - 60 * 60 * 1000), // within 1 hour
+                    lte: new Date(new Date(commenceTime).getTime() + 60 * 60 * 1000)
+                }
             }
         });
 
-        console.log(`[DK PROPS REPO] Game: ${gameRecord.id} (external: ${gameExternalId})`);
-
+        if (!gameRecord) {
+            const gameExternalId = `dk_${dkEventId}`;
+            gameRecord = await prisma.game.create({
+                data: {
+                    externalId: gameExternalId,
+                    homeTeamId: homeTeamRecord.id,
+                    awayTeamId: awayTeamRecord.id,
+                    commenceTime: new Date(commenceTime),
+                    completed: false
+                }
+            });
+            console.log(`[DK PROPS REPO] Created new game: ${gameRecord.id}`);
+        } else {
+            console.log(`[DK PROPS REPO] Using existing game: ${gameRecord.id}`);
+        }
         // get or create draftkings sports book (only once)
         const dkSportsbook = await prisma.sportsbook.upsert({
             where: { name: 'DraftKings' },

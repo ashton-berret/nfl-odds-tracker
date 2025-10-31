@@ -8,180 +8,224 @@ datasource db {
 }
 
 model Team {
-  id            String   @id @default(cuid())
-  name          String   @unique  // "San Francisco 49ers"
-  abbreviation  String @unique  // "SF"
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String   @unique // "San Francisco 49ers"
+  abbreviation String   @unique // "SF"
+  createdAt    DateTime @default(now())
 
-  players       Player[]
-  homeGames     Game[] @relation("HomeTeam")
-  awayGames     Game[] @relation("AwayTeam")
+  players   Player[]
+  homeGames Game[]   @relation("HomeTeam")
+  awayGames Game[]   @relation("AwayTeam")
 }
 
 model Player {
   id        String   @id @default(cuid())
-  name      String   // "Christian McCaffrey"
-  position  String   // "RB", "WR", "QB", etc.
+  name      String // "Christian McCaffrey"
+  position  String // "RB", "WR", "QB", etc.
   teamId    String
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  team      Team     @relation(fields: [teamId], references: [id])
-  props     PlayerProp[]
+  team  Team         @relation(fields: [teamId], references: [id])
+  props PlayerProp[]
 
-  @@unique([name, teamId])  // Same name can exist on different teams
+  @@unique([name, teamId]) // Same name can exist on different teams
   @@index([name])
 }
 
 model PlayerTeamMapping {
-    id              String @id @default(cuid())
-    playerName      String
-    teamName        String
-    position        String?
-    jerseyNumber    String?
-    active          Boolean @default(true)
-    lastUpdated     DateTime @default(now()) @updatedAt
+  id           String   @id @default(cuid())
+  playerName   String
+  teamName     String
+  position     String?
+  jerseyNumber String?
+  active       Boolean  @default(true)
+  lastUpdated  DateTime @default(now()) @updatedAt
 
-    @@unique([playerName, teamName])
-    @@index([playerName])
-    @@index([teamName])
+  @@unique([playerName, teamName])
+  @@index([playerName])
+  @@index([teamName])
 }
 
 model Game {
-  id            String   @id @default(cuid())
-  externalId    String?  @unique  // ID from odds API
-  homeTeamId    String
-  awayTeamId    String
-  commenceTime  DateTime
-  completed     Boolean  @default(false)
-  homeScore     Int?
-  awayScore     Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  externalId   String?  @unique // ID from odds API
+  homeTeamId   String
+  awayTeamId   String
+  commenceTime DateTime
+  completed    Boolean  @default(false)
+  homeScore    Int?
+  awayScore    Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  homeTeam      Team     @relation("HomeTeam", fields: [homeTeamId], references: [id])
-  awayTeam      Team     @relation("AwayTeam", fields: [awayTeamId], references: [id])
-  playerProps   PlayerProp[]
+  homeTeam    Team         @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team         @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  playerProps PlayerProp[]
 
   @@index([commenceTime])
 }
 
 model Sportsbook {
   id        String   @id @default(cuid())
-  name      String   @unique  // "DraftKings", "FanDuel"
-  key       String   @unique  // "draftkings", "fanduel" (API identifier)
+  name      String   @unique // "DraftKings", "FanDuel"
+  key       String   @unique // "draftkings", "fanduel" (API identifier)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  propOdds  PropOdds[]
-  bets      Bet[]
+  propOdds   PropOdds[]
+  bets       Bet[]
+  parlayLegs ParlayLeg[]
 }
 
 model PropOdds {
-    id            String   @id @default(cuid())
-    propId        String
-    sportsbookId  String
-    source        String   @default("theoddsapi")  // "theoddsapi" or "draftkings"
+  id           String @id @default(cuid())
+  propId       String
+  sportsbookId String
+  source       String @default("theoddsapi") // "theoddsapi" or "draftkings"
 
-    // For over/under props (rushing yards, receiving yards, etc)
-    overOdds      Int?     // Now nullable
-    underOdds     Int?     // Now nullable
+  // For over/under props (rushing yards, receiving yards, etc)
+  overOdds  Int? // Now nullable
+  underOdds Int? // Now nullable
 
-    // For single-outcome props (anytime TD, first TD, 2+ TD)
-    outcomeType   String?  // "anytime_td", "first_td", "2plus_td"
-    singleOdds    Int?     // The single price (+400)
+  // For single-outcome props (anytime TD, first TD, 2+ TD)
+  outcomeType String? // "anytime_td", "first_td", "2plus_td"
+  singleOdds  Int? // The single price (+400)
 
-    fetchedAt     DateTime @default(now())
+  fetchedAt DateTime @default(now())
 
-    prop          PlayerProp @relation(fields: [propId], references: [id])
-    sportsbook    Sportsbook @relation(fields: [sportsbookId], references: [id])
+  prop       PlayerProp @relation(fields: [propId], references: [id])
+  sportsbook Sportsbook @relation(fields: [sportsbookId], references: [id])
 
-    @@index([propId, sportsbookId, fetchedAt])
+  @@index([propId, sportsbookId, fetchedAt])
 }
 
 model PlayerProp {
-    id            String   @id @default(cuid())
-    gameId        String
-    playerId      String
-    propType      String   // "rushing_yds", "anytime_td", "first_td", etc.
-    line          Float?   // Now nullable - TD props have no line
-    source        String   @default("theoddsapi")
-    createdAt     DateTime @default(now())
+  id        String   @id @default(cuid())
+  gameId    String
+  playerId  String
+  propType  String // "rushing_yds", "anytime_td", "first_td", etc.
+  line      Float? // Now nullable - TD props have no line
+  source    String   @default("theoddsapi")
+  createdAt DateTime @default(now())
 
-    game          Game       @relation(fields: [gameId], references: [id])
-    player        Player     @relation(fields: [playerId], references: [id])
-    propOdds      PropOdds[]
-    bets          Bet[]
+  game       Game        @relation(fields: [gameId], references: [id])
+  player     Player      @relation(fields: [playerId], references: [id])
+  propOdds   PropOdds[]
+  bets       Bet[]
+  parlayLegs ParlayLeg[]
 
-    // Remove the unique constraint that includes line
-    // @@unique([gameId, playerId, propType, line])  // DELETE THIS
+  // Remove the unique constraint that includes line
+  // @@unique([gameId, playerId, propType, line])  // DELETE THIS
 
-    // Add indexes instead
-    @@index([gameId])
-    @@index([playerId])
-    @@index([gameId, playerId, propType])
+  // Add indexes instead
+  @@index([gameId])
+  @@index([playerId])
+  @@index([gameId, playerId, propType])
+}
+
+model Parlay {
+  id     String @id @default(cuid())
+  userId String
+
+  // parlay details
+  totalAmount  Float
+  combinedOdds Float
+
+  // settlement
+  status String @default("pending")
+  profit Float?
+
+  placedAt  DateTime  @default(now())
+  settledAt DateTime?
+
+  user User        @relation(fields: [userId], references: [id])
+  legs ParlayLeg[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ParlayLeg {
+  id           String @id @default(cuid())
+  parlayId     String
+  propId       String
+  sportsbookId String
+
+  // details for leg
+  side String
+  odds Int
+
+  // settlement for leg
+  result String?
+
+  parlay     Parlay     @relation(fields: [parlayId], references: [id], onDelete: Cascade)
+  prop       PlayerProp @relation(fields: [propId], references: [id])
+  sportsbook Sportsbook @relation(fields: [sportsbookId], references: [id])
+
+  @@index([parlayId])
+  @@index([propId])
 }
 
 // Optional: Track actual results for props
 model PropResult {
-  id            String   @id @default(cuid())
-  propId        String   @unique
-  actualValue   Float    // Actual yards/TDs the player achieved
-  hit           Boolean  // Did it go over the line?
-  recordedAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  propId      String   @unique
+  actualValue Float // Actual yards/TDs the player achieved
+  hit         Boolean // Did it go over the line?
+  recordedAt  DateTime @default(now())
 }
-
-
 
 // user and auth
 model User {
-    id              String @id @default(cuid())
-    email           String @unique
-    username        String @unique
-    passwordHash    String // using bcrypt
-    balance         Float  // start with 1k
-    startingBalance Float
-    createdAt       DateTime @default(now())
-    updatedAt       DateTime @updatedAt
+  id              String   @id @default(cuid())
+  email           String   @unique
+  username        String   @unique
+  passwordHash    String // using bcrypt
+  balance         Float // start with 1k
+  startingBalance Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-    bets            Bet[]
-    sessions        Session[]
+  bets     Bet[]
+  parlays  Parlay[]
+  sessions Session[]
 }
 
 model Session {
-    id              String @id @default(cuid())
-    userId          String
-    expiresAt       DateTime
-    createdAt       DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-    user            User @relation(fields: [userId], references: [id], onDelete: Cascade) // delete all rows in children tables when parent row is deleted
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // delete all rows in children tables when parent row is deleted
 
-    @@index([userId])
+  @@index([userId])
 }
 
 model Bet {
-    id              String @id @default(cuid())
-    userId          String
-    propId          String
-    sportsbookId    String
+  id           String @id @default(cuid())
+  userId       String
+  propId       String
+  sportsbookId String
 
-    // bet details
-    side            String // over or under
-    amount          Float
-    odds            Int
+  // bet details
+  side   String // over or under
+  amount Float
+  odds   Int
 
-    // settlement after game completes
-    status          String @default("pending")
-    profit          Float?
+  // settlement after game completes
+  status String @default("pending")
+  profit Float?
 
-    placedAt        DateTime @default(now())
-    settledAt       DateTime?
+  placedAt  DateTime  @default(now())
+  settledAt DateTime?
 
-    user            User @relation(fields: [userId], references: [id])
-    prop            PlayerProp @relation(fields: [propId], references: [id])
-    sportsbook      Sportsbook @relation(fields: [sportsbookId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+  prop       PlayerProp @relation(fields: [propId], references: [id])
+  sportsbook Sportsbook @relation(fields: [sportsbookId], references: [id])
 
-    @@index([userId])
-    @@index([propId])
-    @@index([status])
+  @@index([userId])
+  @@index([propId])
+  @@index([status])
 }

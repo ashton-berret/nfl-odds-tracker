@@ -1,3 +1,4 @@
+// src/routes/api/my-bets/+server.ts
 import { json } from '@sveltejs/kit';
 import { prisma } from '$lib/server/db';
 import { validateSession } from '$lib/server/auth/session';

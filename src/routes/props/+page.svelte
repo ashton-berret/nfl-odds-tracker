@@ -1,4 +1,5 @@
 <script lang="ts">
+    // src/routes/props/+page.svelte
     import { slide } from 'svelte/transition';
     export let data;
 
@@ -44,10 +45,10 @@
      */
     function findClosestToZeroIndex(lines: any[]): number {
         if (lines.length === 0) return 0;
-        
+
         let closestIndex = 0;
         let closestDistance = Infinity;
-        
+
         for (let i = 0; i < lines.length; i++) {
             const odds = lines[i]?.odds?.overOdds;
             if (odds !== null && odds !== undefined) {
@@ -58,7 +59,7 @@
                 }
             }
         }
-        
+
         return closestIndex;
     }
 
@@ -152,6 +153,15 @@
     })();
 
     /**
+     * auto reset carousel positions when filters change
+     */
+    $: if (searchQuery || selectedPropType || selectedTeam || selectedTimeSlot) {
+        console.log(`[CAROUSEL RESET] Filters changed, clearing all carousel positions`);
+        carouselPositions = {};
+    }
+
+
+    /**
      * Normalize player names for fuzzy matching
      */
     function normalizePlayerName(name: string): string {
@@ -187,10 +197,27 @@
      */
     function toggleGame(gameId: string) {
         if (expandedGames.has(gameId)) {
+            console.log('[CAROUSEL RESET] Game collapsed, clearing positions for gameId:', gameId);
+
+            const keysToDelete: string[] = [];
+            for (const key in carouselPositions) {
+                if (key.includes(gameId)) {
+                    keysToDelete.push(key);
+                }
+            }
+
+            keysToDelete.forEach(key => {
+                delete carouselPositions[key];
+                console.log('[CAROUSEL RESET] Cleared position for key:', key);
+            });
+
+            carouselPositions = {...carouselPositions};
             expandedGames.delete(gameId);
         } else {
+            console.log('[CAROUSEL] Game Expanded: ', gameId);
             expandedGames.add(gameId);
         }
+
         expandedGames = expandedGames;
     }
 
@@ -431,7 +458,7 @@
             propTypes: Array.from(game.propTypes.values())
                 .map((pt: any) => ({
                     propType: pt.propType,
-                    playerGroups: pt.playerGroups.sort((a: any, b: any) => 
+                    playerGroups: pt.playerGroups.sort((a: any, b: any) =>
                         a.playerName.localeCompare(b.playerName)
                     )
                 }))
@@ -624,7 +651,7 @@
                                                 <div class="space-y-4">
                                                     {#each propTypeGroup.playerGroups as playerGroup}
                                                         {@const carouselKey = getCarouselKey(playerGroup.playerId, playerGroup.game.id, playerGroup.propType)}
-                                                        
+
                                                         <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
                                                             <!-- Player Header -->
                                                             <div class="flex items-center justify-between mb-4">
@@ -668,6 +695,11 @@
                                                                                     <div class="text-lg text-slate-300 font-bold">
                                                                                         Over {currentLine.line}
                                                                                     </div>
+                                                                                    {#if currentIndex === findClosestToZeroIndex(playerGroup.lines)}
+                                                                                        <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
+                                                                                            Main Line
+                                                                                        </span>
+                                                                                    {/if}
                                                                                     <div class="text-4xl font-bold {currentLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'}">
                                                                                         {currentLine.odds ? formatOdds(currentLine.odds.overOdds) : 'N/A'}
                                                                                     </div>
@@ -778,6 +810,20 @@
                                                                             ></button>
                                                                         {/each}
                                                                     </div>
+
+                                                                    {#if currentIndex !== findClosestToZeroIndex(playerGroup.lines)}
+                                                                            <div class="text-center mt-2">
+                                                                                <button
+                                                                                    class="text-xs -text-primary hover:text-primary-light font-semibold"
+                                                                                    on:click={() => {
+                                                                                        carouselPositions[carouselKey] = findClosestToZeroIndex(playerGroup.lines);
+                                                                                        carouselPositions = { ...carouselPositions };
+                                                                                    }}
+                                                                                >
+                                                                                    ← Back to Main Line
+                                                                                </button>
+                                                                            </div>
+                                                                    {/if}
                                                                 </div>
                                                                 {/key}
                                                             {/if}

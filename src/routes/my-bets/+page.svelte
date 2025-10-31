@@ -1,4 +1,5 @@
 <script lang="ts">
+    // src/routes/my-bets/+page.svelte
     export let data;
 
     $: user = data.user;

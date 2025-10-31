@@ -1,3 +1,4 @@
+// src/routes/my-bets/+page.ts
 import { redirect } from '@sveltejs/kit';
 
 /**

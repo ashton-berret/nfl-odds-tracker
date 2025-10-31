@@ -1,3 +1,4 @@
+// src/routes/props/+page.server.ts
 import { prisma } from '$lib/server/db';
 
 /**

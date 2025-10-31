@@ -20,7 +20,6 @@
     let selectedProp: any = null;
     let selectedOdds: any = null;
     let selectedSide: 'over' | 'under' = 'over';
-    let betAmount = 100;
     let placing = false;
     let errorMessage = '';
 
@@ -102,6 +101,14 @@
         }
     }
 
+    function formatCurrency(amount: number): string {
+        if (isNaN(amount)) return '$0.00';
+        return `$${amount.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
+    }
+
     /**
      * Calculate potential payout preview (assuming $100 bet)
      */
@@ -131,6 +138,70 @@
             'player_2plus_td': 10
         };
         return order[propType] || 99;
+    }
+
+    /**
+     * Place a single bet (when only 1 item in cart)
+     */
+    async function placeSingleBet() {
+        if (!user) {
+            alert('Please log in to place bets');
+            return;
+        }
+
+        if (parlayCart.length !== 1) {
+            alert('Invalid bet');
+            return;
+        }
+
+        console.log('[BET SLIP] Placing single bet...', {
+            prop: parlayCart[0].prop.playerName,
+            side: parlayCart[0].side,
+            amount: parlayAmount
+        });
+
+        placing = true;
+        errorMessage = '';
+
+        try {
+            const item = parlayCart[0];
+            const oddsValue = item.side === 'over' ? item.odds.overOdds : item.odds.underOdds;
+
+            // Get sportsbook ID
+            const sportsbookResponse = await fetch(`/api/sportsbooks?name=${encodeURIComponent(item.odds.sportsbook)}`);
+            const sportsbookData = await sportsbookResponse.json();
+
+            console.log('[BET SLIP] Sportsbook ID:', sportsbookData.id);
+
+            const response = await fetch('/api/bets/place', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    propId: item.prop.id,
+                    sportsbookId: sportsbookData.id,
+                    side: item.side,
+                    amount: parlayAmount,
+                    odds: oddsValue
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                console.log('[BET SLIP] Bet placed successfully! New balance:', result.newBalance);
+                parlayCart = [];
+                alert('Bet placed successfully!');
+                window.location.reload();
+            } else {
+                console.error('[BET SLIP] Bet placement failed:', result.error);
+                errorMessage = result.error;
+            }
+        } catch (error) {
+            console.error('[BET SLIP] Error placing bet:', error);
+            errorMessage = 'Failed to place bet';
+        } finally {
+            placing = false;
+        }
     }
 
     /**
@@ -447,61 +518,6 @@
         errorMessage = '';
     }
 
-    /**
-     * Place bet
-     */
-    async function placeBet() {
-        if (!selectedProp || !selectedOdds || !user) return;
-
-        console.log('[PROPS PAGE] Placing bet...', {
-            prop: selectedProp.playerName || selectedProp.player?.name,
-            side: selectedSide,
-            amount: betAmount,
-            odds: selectedOdds
-        });
-
-        placing = true;
-        errorMessage = '';
-
-        try {
-            const oddsValue = selectedSide === 'over' ? selectedOdds.overOdds : selectedOdds.underOdds;
-
-            // Get sportsbook ID
-            const sportsbookResponse = await fetch(`/api/sportsbooks?name=${encodeURIComponent(selectedOdds.sportsbook)}`);
-            const sportsbookData = await sportsbookResponse.json();
-
-            console.log('[PROPS PAGE] Sportsbook ID:', sportsbookData.id);
-
-            const response = await fetch('/api/bets/place', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    propId: selectedProp.id,
-                    sportsbookId: sportsbookData.id,
-                    side: selectedSide,
-                    amount: betAmount,
-                    odds: oddsValue
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                console.log('[PROPS PAGE] Bet placed successfully! New balance:', result.newBalance);
-                showBetSlip = false;
-                alert('Bet placed successfully!');
-                window.location.reload();
-            } else {
-                console.error('[PROPS PAGE] Bet placement failed:', result.error);
-                errorMessage = result.error;
-            }
-        } catch (error) {
-            console.error('[PROPS PAGE] Error placing bet:', error);
-            errorMessage = 'Failed to place bet';
-        } finally {
-            placing = false;
-        }
-    }
 
     /**
      * Calculate potential payout
@@ -692,27 +708,10 @@
             {allExpanded ? 'Collapse All' : 'Expand All'}
         </button>
     </div>
-    <!-- Floating Bet Cart -->
-    {#if parlayCart.length > 0}
-        <button
-            on:click={() => showParlayCart = true}
-            class="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white px-6 py-4 rounded-full shadow-2xl hover:shadow-glow-md transition-all hover:scale-110 flex items-center gap-3"
-        >
-            <div class="relative">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <!-- Badge showing number of items -->
-                <span class="absolute -top-2 -right-2 bg-danger text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {parlayCart.length}
-                </span>
-            </div>
-            <span class="font-bold">Parlay Cart</span>
-        </button>
-    {/if}
+
     <!-- Search Bar + Filters + Controls -->
     <div class="bg-slate-800 rounded-xl shadow-xl border border-slate-700 p-4 mb-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols- gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <!-- Search -->
             <input
                 type="text"
@@ -755,11 +754,10 @@
                 <option value="sunday_night">Sunday Night</option>
                 <option value="monday">Monday Night</option>
             </select>
-
         </div>
 
         <!-- Clear Filters + Results Count -->
-        {#if searchQuery || selectedPropType !== 'all' || selectedTeam !== 'all'}
+        {#if searchQuery || selectedPropType !== 'all' || selectedTeam !== 'all' || selectedTimeSlot !== 'all'}
             <div class="mt-3 flex items-center gap-3">
                 <button
                     on:click={clearFilters}
@@ -803,608 +801,510 @@
                 </div>
             </button>
         </div>
+
         <!-- Tab Content -->
-            <div class="p-6">
-                {#if activeTab === 'draftkings'}
-                    <!-- DraftKings Alt Lines View - Grouped by Game -->
-                    <div class="space-y-4">
-                        {#if groupedDKProps.length === 0}
-                            <div class="text-center py-12">
-                                {#if data.dkProps.length === 0}
-                                    <p class="text-slate-400 mb-4">No DraftKings data available.</p>
-                                    <a href="/admin" class="text-primary underline font-semibold">Go to Admin Panel to fetch props</a>
-                                {:else}
-                                    <p class="text-slate-400">No props match your filters.</p>
-                                {/if}
-                            </div>
-                        {:else}
-                            {#each groupedDKProps as game}
-                                <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                                    <!-- Game Header (Collapsible) -->
-                                    <button
-                                        on:click={() => toggleGame(game.gameId)}
-                                        class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
-                                    >
-                                        <div class="text-left">
-                                            <h3 class="text-xl font-bold text-slate-100">
-                                                {game.awayTeam} @ {game.homeTeam}
-                                            </h3>
-                                            <p class="text-sm text-slate-400 mt-1">
-                                                {formatDate(game.commenceTime)} • {game.propTypes.reduce((sum: number, pt: any) => sum + pt.playerGroups.length, 0)} players
-                                            </p>
-                                        </div>
-                                        <div class="text-slate-400 text-xl">
-                                            {expandedGames.has(game.gameId) ? '▼' : '▶'}
-                                        </div>
-                                    </button>
+        <div class="p-6">
+            {#if activeTab === 'draftkings'}
+                <!-- DraftKings Alt Lines View - Grouped by Game -->
+                <div class="space-y-4">
+                    {#if groupedDKProps.length === 0}
+                        <div class="text-center py-12">
+                            {#if data.dkProps.length === 0}
+                                <p class="text-slate-400 mb-4">No DraftKings data available.</p>
+                                <a href="/admin" class="text-primary underline font-semibold">Go to Admin Panel to fetch props</a>
+                            {:else}
+                                <p class="text-slate-400">No props match your filters.</p>
+                            {/if}
+                        </div>
+                    {:else}
+                        {#each groupedDKProps as game}
+                            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                <!-- Game Header (Collapsible) -->
+                                <button
+                                    on:click={() => toggleGame(game.gameId)}
+                                    class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+                                >
+                                    <div class="text-left">
+                                        <h3 class="text-xl font-bold text-slate-100">
+                                            {game.awayTeam} @ {game.homeTeam}
+                                        </h3>
+                                        <p class="text-sm text-slate-400 mt-1">
+                                            {formatDate(game.commenceTime)} • {game.propTypes.reduce((sum: number, pt: any) => sum + pt.playerGroups.length, 0)} players
+                                        </p>
+                                    </div>
+                                    <div class="text-slate-400 text-xl">
+                                        {expandedGames.has(game.gameId) ? '▼' : '▶'}
+                                    </div>
+                                </button>
 
-                                    <!-- Game Props (Collapsible) -->
-                                    {#if expandedGames.has(game.gameId)}
-                                        <div class="border-t border-slate-700 p-6 space-y-6">
-                                            {#each game.propTypes as propTypeGroup}
-                                                <!-- Prop Type Section -->
-                                                <div>
-                                                    <h4 class="text-lg font-bold text-slate-100 mb-4 pb-2 border-b border-slate-700">
-                                                        {formatPropType(propTypeGroup.propType)}
-                                                    </h4>
-                                                    <div class="space-y-4">
-                                                        {#each propTypeGroup.playerGroups as playerGroup}
-                                                            {@const carouselKey = getCarouselKey(playerGroup.playerId, playerGroup.game.id, playerGroup.propType)}
+                                <!-- Game Props (Collapsible) -->
+                                {#if expandedGames.has(game.gameId)}
+                                    <div class="border-t border-slate-700 p-6 space-y-6">
+                                        {#each game.propTypes as propTypeGroup}
+                                            <!-- Prop Type Section -->
+                                            <div>
+                                                <h4 class="text-lg font-bold text-slate-100 mb-4 pb-2 border-b border-slate-700">
+                                                    {formatPropType(propTypeGroup.propType)}
+                                                </h4>
+                                                <div class="space-y-4">
+                                                    {#each propTypeGroup.playerGroups as playerGroup}
+                                                        {@const carouselKey = getCarouselKey(playerGroup.playerId, playerGroup.game.id, playerGroup.propType)}
 
-                                                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
-                                                                <!-- Player Header -->
-                                                                <div class="flex items-center justify-between mb-4">
-                                                                    <h5 class="text-base font-bold text-slate-100">{playerGroup.playerName}</h5>
-                                                                    {#if playerGroup.lines.length > 0}
-                                                                        <span class="text-xs text-slate-400">
-                                                                            {playerGroup.lines.length} alt {playerGroup.lines.length === 1 ? 'line' : 'lines'}
-                                                                        </span>
-                                                                    {/if}
-                                                                </div>
-
-                                                                <!-- Alt Lines Card Carousel -->
-                                                                {#if playerGroup.lines && playerGroup.lines.length > 0}
-                                                                    {#key carouselPositions[carouselKey] ?? findClosestToZeroIndex(playerGroup.lines)}
-                                                                        {@const currentIndex = getCurrentAltLineIndex(carouselKey, playerGroup.lines)}
-                                                                        {@const prevIndex = currentIndex > 0 ? currentIndex - 1 : null}
-                                                                        {@const nextIndex = currentIndex < playerGroup.lines.length - 1 ? currentIndex + 1 : null}
-                                                                        {@const currentLine = playerGroup.lines[currentIndex]}
-                                                                    <div class="relative">
-                                                                        <!-- Carousel Wrapper -->
-                                                                        <div class="relative overflow-hidden px-12 py-4">
-                                                                            <div class="flex items-center justify-center gap-4 transition-all duration-300 ease-in-out" style="transform: translateX(0);">
-                                                                                <!-- Previous Card (peek, faded) -->
-                                                                                {#if prevIndex !== null}
-                                                                                    {@const prevLine = playerGroup.lines[prevIndex]}
-                                                                                    <div class="flex-shrink-0 w-48 opacity-50 scale-90 transition-all duration-300 ease-in-out pointer-events-none">
-                                                                                        <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 h-48 flex flex-col items-center justify-center">
-                                                                                            <div class="text-sm text-slate-400 font-semibold mb-2">
-                                                                                                Over {prevLine.line}
-                                                                                            </div>
-                                                                                            <div class="text-2xl font-bold {prevLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'} mb-2">
-                                                                                                {prevLine.odds ? formatOdds(prevLine.odds.overOdds) : 'N/A'}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                {/if}
-
-                                                                                <!-- Current Card (center, full) -->
-                                                                                <div class="flex-shrink-0 w-64 opacity-100 scale-100 transition-all duration-300 ease-in-out">
-                                                                                    <div class="bg-slate-900 border-2 border-primary/50 rounded-xl p-6 shadow-xl h-56 flex flex-col items-center justify-center gap-3">
-                                                                                        <div class="flex items-center justify-center gap-2">
-                                                                                            <div class="text-lg text-slate-300 font-bold">
-                                                                                                Over {currentLine.line}
-                                                                                            </div>
-                                                                                            {#if currentIndex === findClosestToZeroIndex(playerGroup.lines)}
-                                                                                                <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
-                                                                                                    MAIN
-                                                                                                </span>
-                                                                                            {/if}
-                                                                                        </div>
-                                                                                        <div class="text-3xl font-bold {currentLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'}">
-                                                                                            {currentLine.odds ? formatOdds(currentLine.odds.overOdds) : 'N/A'}
-                                                                                        </div>
-                                                                                        {#if currentLine.odds && currentLine.odds.overOdds !== null}
-                                                                                            <div class="text-xs text-slate-400">
-                                                                                                Payout: ${calculatePayoutPreview(currentLine.odds.overOdds).toFixed(2)}
-                                                                                            </div>
-                                                                                            <div class="w-full flex gap-2">
-                                                                                                <!-- Single Bet Button -->
-                                                                                                <button
-                                                                                                    class="flex-1 px-3 py-2 bg-gradient-to-r from-success to-success-dark hover:from-success-dark hover:to-success text-white rounded-lg font-bold text-sm transition-all hover:scale-105 shadow-lg"
-                                                                                                    on:click={() => openBetSlip({
-                                                                                                        id: currentLine.id,
-                                                                                                        playerName: playerGroup.playerName,
-                                                                                                        propType: playerGroup.propType,
-                                                                                                        line: currentLine.line,
-                                                                                                        game: playerGroup.game
-                                                                                                    }, 'over', {
-                                                                                                        sportsbook: currentLine.odds.sportsbook.name,
-                                                                                                        overOdds: currentLine.odds.overOdds,
-                                                                                                        underOdds: currentLine.odds.underOdds
-                                                                                                    })}
-                                                                                                >
-                                                                                                    Bet
-                                                                                                </button>
-                                                                                                <!-- Add to Parlay Button -->
-                                                                                                <button
-                                                                                                    class="px-3 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/50 text-primary rounded-lg font-bold text-xs transition-all hover:scale-105 flex items-center gap-1"
-                                                                                                    on:click={() => addToParlayCart({
-                                                                                                        id: currentLine.id,
-                                                                                                        playerName: playerGroup.playerName,
-                                                                                                        propType: playerGroup.propType,
-                                                                                                        line: currentLine.line,
-                                                                                                        game: playerGroup.game
-                                                                                                    }, 'over', {
-                                                                                                        sportsbook: currentLine.odds.sportsbook.name,
-                                                                                                        overOdds: currentLine.odds.overOdds,
-                                                                                                        underOdds: currentLine.odds.underOdds
-                                                                                                    })}
-                                                                                                    title="Add to parlay"
-                                                                                                >
-                                                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                                                                                    </svg>
-                                                                                                    <span>Parlay</span>
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        {:else}
-                                                                                            <div class="text-xs text-slate-500">No odds available</div>
-                                                                                        {/if}
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <!-- Next Card (peek, faded) -->
-                                                                                {#if nextIndex !== null}
-                                                                                    {@const nextLine = playerGroup.lines[nextIndex]}
-                                                                                    <div class="flex-shrink-0 w-48 opacity-50 scale-90 transition-all duration-300 ease-in-out pointer-events-none">
-                                                                                        <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 h-48 flex flex-col items-center justify-center">
-                                                                                            <div class="text-sm text-slate-400 font-semibold mb-2">
-                                                                                                Over {nextLine.line}
-                                                                                            </div>
-                                                                                            <div class="text-2xl font-bold {nextLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'} mb-2">
-                                                                                                {nextLine.odds ? formatOdds(nextLine.odds.overOdds) : 'N/A'}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                {/if}
-                                                                            </div>
-
-                                                                            <!-- Left Arrow -->
-                                                                            {#if currentIndex > 0}
-                                                                                <button
-                                                                                    class="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 border border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-all z-10 backdrop-blur-sm"
-                                                                                    on:click|stopPropagation={() => {
-                                                                                        const current = carouselPositions[carouselKey];
-                                                                                        if (current !== undefined && current > 0) {
-                                                                                            carouselPositions[carouselKey] = current - 1;
-                                                                                            carouselPositions = { ...carouselPositions };
-                                                                                        } else {
-                                                                                            // Initialize and go to previous
-                                                                                            const defaultIdx = findClosestToZeroIndex(playerGroup.lines);
-                                                                                            if (defaultIdx > 0) {
-                                                                                                carouselPositions[carouselKey] = defaultIdx - 1;
-                                                                                                carouselPositions = { ...carouselPositions };
-                                                                                            }
-                                                                                        }
-                                                                                    }}
-                                                                                    aria-label="Previous alt line"
-                                                                                >
-                                                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                                                                                    </svg>
-                                                                                </button>
-                                                                            {/if}
-
-                                                                            <!-- Right Arrow -->
-                                                                            {#if currentIndex < playerGroup.lines.length - 1}
-                                                                                <button
-                                                                                    class="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 border border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-all z-10 backdrop-blur-sm"
-                                                                                    on:click|stopPropagation={() => {
-                                                                                        const current = carouselPositions[carouselKey];
-                                                                                        if (current !== undefined && current < playerGroup.lines.length - 1) {
-                                                                                            carouselPositions[carouselKey] = current + 1;
-                                                                                            carouselPositions = { ...carouselPositions };
-                                                                                        } else {
-                                                                                            // Initialize and go to next
-                                                                                            const defaultIdx = findClosestToZeroIndex(playerGroup.lines);
-                                                                                            if (defaultIdx < playerGroup.lines.length - 1) {
-                                                                                                carouselPositions[carouselKey] = defaultIdx + 1;
-                                                                                                carouselPositions = { ...carouselPositions };
-                                                                                            }
-                                                                                        }
-                                                                                    }}
-                                                                                    aria-label="Next alt line"
-                                                                                >
-                                                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                                                                    </svg>
-                                                                                </button>
-                                                                            {/if}
-                                                                        </div>
-
-                                                                        <!-- Dot Indicators -->
-                                                                        <div class="flex items-center justify-center gap-2 mt-4">
-                                                                            {#each playerGroup.lines as _, i}
-                                                                                <button
-                                                                                    class="w-2 h-2 rounded-full transition-all {i === currentIndex ? 'bg-primary w-6' : 'bg-slate-600 hover:bg-slate-500'}"
-                                                                                    on:click={() => {
-                                                                                        carouselPositions[carouselKey] = i;
-                                                                                        carouselPositions = { ...carouselPositions };
-                                                                                    }}
-                                                                                    aria-label="Go to line {i + 1}"
-                                                                                ></button>
-                                                                            {/each}
-                                                                        </div>
-
-                                                                        {#if currentIndex !== findClosestToZeroIndex(playerGroup.lines)}
-                                                                            <div class="text-center mt-2">
-                                                                                <button
-                                                                                    class="text-xs text-primary hover:text-primary-light font-semibold"
-                                                                                    on:click={() => {
-                                                                                        console.log('[CAROUSEL RESET] Manual reset to main line for key:', carouselKey);
-                                                                                        carouselPositions[carouselKey] = findClosestToZeroIndex(playerGroup.lines);
-                                                                                        carouselPositions = { ...carouselPositions };
-                                                                                    }}
-                                                                                >
-                                                                                    ← Back to Main Line
-                                                                                </button>
-                                                                            </div>
-                                                                        {/if}
-                                                                    </div>
-                                                                    {/key}
+                                                        <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
+                                                            <!-- Player Header -->
+                                                            <div class="flex items-center justify-between mb-4">
+                                                                <h5 class="text-base font-bold text-slate-100">{playerGroup.playerName}</h5>
+                                                                {#if playerGroup.lines.length > 0}
+                                                                    <span class="text-xs text-slate-400">
+                                                                        {playerGroup.lines.length} alt {playerGroup.lines.length === 1 ? 'line' : 'lines'}
+                                                                    </span>
                                                                 {/if}
                                                             </div>
-                                                        {/each}
-                                                    </div>
-                                                </div>
-                                            {/each}
-                                        </div>
-                                    {/if}
-                                </div>
-                            {/each}
-                        {/if}
-                    </div>
 
-                {:else}
-                    <!-- Market Consensus View - Grouped by Game -->
-                    <div class="space-y-4">
-                        {#if groupedOddsApiProps.length === 0}
-                            <div class="text-center py-12">
-                                {#if data.oddsApiProps.length === 0}
-                                    <p class="text-slate-400 mb-4">No market consensus data available.</p>
-                                    <a href="/admin" class="text-primary underline font-semibold">Go to Admin Panel to fetch props</a>
-                                {:else}
-                                    <p class="text-slate-400">No props match your filters.</p>
+                                                            <!-- Alt Lines Card Carousel -->
+                                                            {#if playerGroup.lines && playerGroup.lines.length > 0}
+                                                                {#key carouselPositions[carouselKey] ?? findClosestToZeroIndex(playerGroup.lines)}
+                                                                    {@const currentIndex = getCurrentAltLineIndex(carouselKey, playerGroup.lines)}
+                                                                    {@const prevIndex = currentIndex > 0 ? currentIndex - 1 : null}
+                                                                    {@const nextIndex = currentIndex < playerGroup.lines.length - 1 ? currentIndex + 1 : null}
+                                                                    {@const currentLine = playerGroup.lines[currentIndex]}
+                                                                <div class="relative">
+                                                                    <!-- Carousel Wrapper -->
+                                                                    <div class="relative overflow-hidden px-12 py-4">
+                                                                        <div class="flex items-center justify-center gap-4 transition-all duration-300 ease-in-out" style="transform: translateX(0);">
+                                                                            <!-- Previous Card (peek, faded) -->
+                                                                            {#if prevIndex !== null}
+                                                                                {@const prevLine = playerGroup.lines[prevIndex]}
+                                                                                <div class="flex-shrink-0 w-48 opacity-50 scale-90 transition-all duration-300 ease-in-out pointer-events-none">
+                                                                                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 h-48 flex flex-col items-center justify-center">
+                                                                                        <div class="text-sm text-slate-400 font-semibold mb-2">
+                                                                                            Over {prevLine.line}
+                                                                                        </div>
+                                                                                        <div class="text-2xl font-bold {prevLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'} mb-2">
+                                                                                            {prevLine.odds ? formatOdds(prevLine.odds.overOdds) : 'N/A'}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            {/if}
+
+                                                                            <!-- Current Card (center, full) -->
+                                                                            <div class="flex-shrink-0 w-64 opacity-100 scale-100 transition-all duration-300 ease-in-out">
+                                                                                <div class="bg-slate-900 border-2 border-primary/50 rounded-xl p-6 shadow-xl h-56 flex flex-col items-center justify-center gap-3">
+                                                                                    <div class="flex items-center justify-center gap-2">
+                                                                                        <div class="text-lg text-slate-300 font-bold">
+                                                                                            Over {currentLine.line}
+                                                                                        </div>
+                                                                                        {#if currentIndex === findClosestToZeroIndex(playerGroup.lines)}
+                                                                                            <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
+                                                                                                MAIN
+                                                                                            </span>
+                                                                                        {/if}
+                                                                                    </div>
+                                                                                    <div class="text-3xl font-bold {currentLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'}">
+                                                                                        {currentLine.odds ? formatOdds(currentLine.odds.overOdds) : 'N/A'}
+                                                                                    </div>
+                                                                                    {#if currentLine.odds && currentLine.odds.overOdds !== null}
+                                                                                        <div class="text-xs text-slate-400">
+                                                                                            Payout: ${calculatePayoutPreview(currentLine.odds.overOdds).toFixed(2)}
+                                                                                        </div>
+                                                                                        <button
+                                                                                            class="w-full px-4 py-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white rounded-lg font-bold text-sm transition-all hover:scale-105 shadow-lg"
+                                                                                            on:click={() => addToParlayCart({
+                                                                                                id: currentLine.id,
+                                                                                                playerName: playerGroup.playerName,
+                                                                                                propType: playerGroup.propType,
+                                                                                                line: currentLine.line,
+                                                                                                game: playerGroup.game
+                                                                                            }, 'over', {
+                                                                                                sportsbook: currentLine.odds.sportsbook.name,
+                                                                                                overOdds: currentLine.odds.overOdds,
+                                                                                                underOdds: currentLine.odds.underOdds
+                                                                                            })}
+                                                                                        >
+                                                                                            Add to Bet Slip
+                                                                                        </button>
+                                                                                    {:else}
+                                                                                        <div class="text-xs text-slate-500">No odds available</div>
+                                                                                    {/if}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <!-- Next Card (peek, faded) -->
+                                                                            {#if nextIndex !== null}
+                                                                                {@const nextLine = playerGroup.lines[nextIndex]}
+                                                                                <div class="flex-shrink-0 w-48 opacity-50 scale-90 transition-all duration-300 ease-in-out pointer-events-none">
+                                                                                    <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 h-48 flex flex-col items-center justify-center">
+                                                                                        <div class="text-sm text-slate-400 font-semibold mb-2">
+                                                                                            Over {nextLine.line}
+                                                                                        </div>
+                                                                                        <div class="text-2xl font-bold {nextLine.odds?.overOdds > 0 ? 'text-success' : 'text-slate-200'} mb-2">
+                                                                                            {nextLine.odds ? formatOdds(nextLine.odds.overOdds) : 'N/A'}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            {/if}
+                                                                        </div>
+
+                                                                        <!-- Left Arrow -->
+                                                                        {#if currentIndex > 0}
+                                                                            <button
+                                                                                class="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 border border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-all z-10 backdrop-blur-sm"
+                                                                                on:click|stopPropagation={() => {
+                                                                                    const current = carouselPositions[carouselKey];
+                                                                                    if (current !== undefined && current > 0) {
+                                                                                        carouselPositions[carouselKey] = current - 1;
+                                                                                        carouselPositions = { ...carouselPositions };
+                                                                                    } else {
+                                                                                        const defaultIdx = findClosestToZeroIndex(playerGroup.lines);
+                                                                                        if (defaultIdx > 0) {
+                                                                                            carouselPositions[carouselKey] = defaultIdx - 1;
+                                                                                            carouselPositions = { ...carouselPositions };
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                                aria-label="Previous alt line"
+                                                                            >
+                                                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        {/if}
+
+                                                                        <!-- Right Arrow -->
+                                                                        {#if currentIndex < playerGroup.lines.length - 1}
+                                                                            <button
+                                                                                class="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 border border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-all z-10 backdrop-blur-sm"
+                                                                                on:click|stopPropagation={() => {
+                                                                                    const current = carouselPositions[carouselKey];
+                                                                                    if (current !== undefined && current < playerGroup.lines.length - 1) {
+                                                                                        carouselPositions[carouselKey] = current + 1;
+                                                                                        carouselPositions = { ...carouselPositions };
+                                                                                    } else {
+                                                                                        const defaultIdx = findClosestToZeroIndex(playerGroup.lines);
+                                                                                        if (defaultIdx < playerGroup.lines.length - 1) {
+                                                                                            carouselPositions[carouselKey] = defaultIdx + 1;
+                                                                                            carouselPositions = { ...carouselPositions };
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                                aria-label="Next alt line"
+                                                                            >
+                                                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                                                                </svg>
+                                                                            </button>
+                                                                        {/if}
+                                                                    </div>
+
+                                                                    <!-- Dot Indicators -->
+                                                                    <div class="flex items-center justify-center gap-2 mt-4">
+                                                                        {#each playerGroup.lines as _, i}
+                                                                            <button
+                                                                                class="w-2 h-2 rounded-full transition-all {i === currentIndex ? 'bg-primary w-6' : 'bg-slate-600 hover:bg-slate-500'}"
+                                                                                on:click={() => {
+                                                                                    carouselPositions[carouselKey] = i;
+                                                                                    carouselPositions = { ...carouselPositions };
+                                                                                }}
+                                                                                aria-label="Go to line {i + 1}"
+                                                                            ></button>
+                                                                        {/each}
+                                                                    </div>
+
+                                                                    {#if currentIndex !== findClosestToZeroIndex(playerGroup.lines)}
+                                                                        <div class="text-center mt-2">
+                                                                            <button
+                                                                                class="text-xs text-primary hover:text-primary-light font-semibold"
+                                                                                on:click={() => {
+                                                                                    console.log('[CAROUSEL RESET] Manual reset to main line for key:', carouselKey);
+                                                                                    carouselPositions[carouselKey] = findClosestToZeroIndex(playerGroup.lines);
+                                                                                    carouselPositions = { ...carouselPositions };
+                                                                                }}
+                                                                            >
+                                                                                ← Back to Main Line
+                                                                            </button>
+                                                                        </div>
+                                                                    {/if}
+                                                                </div>
+                                                                {/key}
+                                                            {/if}
+                                                        </div>
+                                                    {/each}
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
                                 {/if}
                             </div>
-                        {:else}
-                            {#each groupedOddsApiProps as game}
-                                <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-                                    <!-- Game Header (Collapsible) -->
-                                    <button
-                                        on:click={() => toggleGame(game.gameId)}
-                                        class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
-                                    >
-                                        <div class="text-left">
-                                            <h3 class="text-xl font-bold text-slate-100">
-                                                {game.awayTeam} @ {game.homeTeam}
-                                            </h3>
-                                            <p class="text-sm text-slate-400 mt-1">
-                                                {formatDate(game.commenceTime)} • {game.props.length} props
-                                            </p>
-                                        </div>
-                                        <div class="text-slate-400 text-xl">
-                                            {expandedGames.has(game.gameId) ? '▼' : '▶'}
-                                        </div>
-                                    </button>
+                        {/each}
+                    {/if}
+                </div>
 
-                                    <!-- Game Props (Collapsible) -->
-                                    {#if expandedGames.has(game.gameId)}
-                                        <div class="border-t border-slate-700 p-6 space-y-4">
-                                            {#each game.props as prop}
-                                                <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
-                                                    <!-- Player Header -->
-                                                    <div class="flex items-center justify-between mb-3">
-                                                        <div>
-                                                            <h4 class="text-lg font-bold text-slate-100">{prop.playerName}</h4>
-                                                        </div>
-                                                        <div class="text-right">
-                                                            <span class="px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
-                                                                {formatPropType(prop.propType)}
-                                                            </span>
-                                                            <div class="text-xl font-bold text-slate-100 mt-2">
-                                                                O/U {prop.line}
-                                                            </div>
-                                                        </div>
+            {:else}
+                <!-- Market Consensus View - Grouped by Game -->
+                <div class="space-y-4">
+                    {#if groupedOddsApiProps.length === 0}
+                        <div class="text-center py-12">
+                            {#if data.oddsApiProps.length === 0}
+                                <p class="text-slate-400 mb-4">No market consensus data available.</p>
+                                <a href="/admin" class="text-primary underline font-semibold">Go to Admin Panel to fetch props</a>
+                            {:else}
+                                <p class="text-slate-400">No props match your filters.</p>
+                            {/if}
+                        </div>
+                    {:else}
+                        {#each groupedOddsApiProps as game}
+                            <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                <!-- Game Header (Collapsible) -->
+                                <button
+                                    on:click={() => toggleGame(game.gameId)}
+                                    class="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
+                                >
+                                    <div class="text-left">
+                                        <h3 class="text-xl font-bold text-slate-100">
+                                            {game.awayTeam} @ {game.homeTeam}
+                                        </h3>
+                                        <p class="text-sm text-slate-400 mt-1">
+                                            {formatDate(game.commenceTime)} • {game.props.length} props
+                                        </p>
+                                    </div>
+                                    <div class="text-slate-400 text-xl">
+                                        {expandedGames.has(game.gameId) ? '▼' : '▶'}
+                                    </div>
+                                </button>
+
+                                <!-- Game Props (Collapsible) -->
+                                {#if expandedGames.has(game.gameId)}
+                                    <div class="border-t border-slate-700 p-6 space-y-4">
+                                        {#each game.props as prop}
+                                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4">
+                                                <!-- Player Header -->
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <div>
+                                                        <h4 class="text-lg font-bold text-slate-100">{prop.playerName}</h4>
                                                     </div>
-
-                                                    <!-- Sportsbooks Grid -->
-                                                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                                        {#each prop.allOdds as odds}
-                                                            <div class="bg-slate-900 border border-slate-600 rounded p-2">
-                                                                <div class="text-xs font-semibold text-slate-400 mb-2 text-center truncate">
-                                                                    {odds.sportsbook}
-                                                                </div>
-                                                                <div class="flex gap-1">
-                                                                    <!-- Over Button -->
-                                                                    {#if odds.overOdds !== null && odds.overOdds !== undefined}
-                                                                        <div class="flex flex-col gap-1 flex-1">
-                                                                            <button
-                                                                                on:click={() => openBetSlip(prop, 'over', odds)}
-                                                                                class="w-full text-center hover:bg-success/20 border border-success/30 hover:border-success/50 rounded p-1 transition-all hover:scale-105"
-                                                                            >
-                                                                                <div class="text-xs text-slate-500 mb-1">O</div>
-                                                                                <div class="text-sm font-bold text-success">
-                                                                                    {formatOdds(odds.overOdds)}
-                                                                                </div>
-                                                                            </button>
-                                                                            <button
-                                                                                on:click={() => addToParlayCart(prop, 'over', odds)}
-                                                                                class="w-full flex items-center justify-center bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/50 rounded py-1 transition-all"
-                                                                                title="Add to parlay"
-                                                                            >
-                                                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                                                                </svg>
-                                                                                <span>Parlay</span>
-                                                                            </button>
-                                                                        </div>
-                                                                    {:else}
-                                                                        <div class="flex-1 text-center bg-slate-700/30 border border-slate-600/30 rounded p-1">
-                                                                            <div class="text-xs text-slate-500 mb-1">O</div>
-                                                                            <div class="text-sm font-bold text-slate-500">N/A</div>
-                                                                        </div>
-                                                                    {/if}
-
-                                                                    <!-- Under Button -->
-                                                                    {#if odds.underOdds !== null && odds.underOdds !== undefined}
-                                                                        <div class="flex flex-col gap-1 flex-1">
-                                                                            <button
-                                                                                on:click={() => openBetSlip(prop, 'under', odds)}
-                                                                                class="w-full text-center hover:bg-danger/20 border border-danger/30 hover:border-danger/50 rounded p-1 transition-all hover:scale-105"
-                                                                            >
-                                                                                <div class="text-xs text-slate-500 mb-1">U</div>
-                                                                                <div class="text-sm font-bold text-danger">
-                                                                                    {formatOdds(odds.underOdds)}
-                                                                                </div>
-                                                                            </button>
-                                                                            <button
-                                                                                on:click={() => addToParlayCart(prop, 'under', odds)}
-                                                                                class="w-full flex items-center justify-center bg-primary/10 hover:bg-primary/20 border border-primary/30 hover:border-primary/50 rounded py-1 transition-all"
-                                                                                title="Add to parlay"
-                                                                            >
-                                                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                                                                </svg>
-                                                                                <span>Parlay</span>
-                                                                            </button>
-                                                                        </div>
-                                                                    {:else}
-                                                                        <div class="flex-1 text-center bg-slate-700/30 border border-slate-600/30 rounded p-1">
-                                                                            <div class="text-xs text-slate-500 mb-1">U</div>
-                                                                            <div class="text-sm font-bold text-slate-500">N/A</div>
-                                                                        </div>
-                                                                    {/if}
-                                                                </div>
-                                                            </div>
-                                                        {/each}
+                                                    <div class="text-right">
+                                                        <span class="px-3 py-1 text-xs font-bold rounded-full bg-primary/20 text-primary border border-primary/30">
+                                                            {formatPropType(prop.propType)}
+                                                        </span>
+                                                        <div class="text-xl font-bold text-slate-100 mt-2">
+                                                            O/U {prop.line}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            {/each}
-                                        </div>
-                                    {/if}
-                                </div>
-                            {/each}
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-        </div>
-    </div>
 
-    <!-- Bet Slip Modal -->
-    {#if showBetSlip && selectedProp}
-        <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
-                <h2 class="text-2xl font-bold text-slate-100 mb-6">Place Bet</h2>
+                                                <!-- Sportsbooks Grid -->
+                                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                    {#each prop.allOdds as odds}
+                                                        <div class="bg-slate-900 border border-slate-600 rounded p-2">
+                                                            <div class="text-xs font-semibold text-slate-400 mb-2 text-center truncate">
+                                                                {odds.sportsbook}
+                                                            </div>
+                                                            <div class="flex gap-2">
+                                                                <!-- Over Button -->
+                                                                {#if odds.overOdds !== null && odds.overOdds !== undefined}
+                                                                    <button
+                                                                        on:click={() => addToParlayCart(prop, 'over', odds)}
+                                                                        class="flex-1 text-center hover:bg-success/20 border border-success/30 hover:border-success/50 rounded p-1 transition-all hover:scale-105"
+                                                                    >
+                                                                        <div class="text-xs text-slate-500 mb-1">O</div>
+                                                                        <div class="text-sm font-bold text-success">
+                                                                            {formatOdds(odds.overOdds)}
+                                                                        </div>
+                                                                    </button>
+                                                                {:else}
+                                                                    <div class="flex-1 text-center bg-slate-700/30 border border-slate-600/30 rounded p-1">
+                                                                        <div class="text-xs text-slate-500 mb-1">O</div>
+                                                                        <div class="text-sm font-bold text-slate-500">N/A</div>
+                                                                    </div>
+                                                                {/if}
 
-                <div class="mb-6 p-4 bg-slate-900 rounded-lg border border-slate-700">
-                    <div class="font-bold text-slate-100 text-lg">{selectedProp.playerName}</div>
-                    <div class="text-sm text-slate-300 mt-2">
-                        {formatPropType(selectedProp.propType)} {selectedSide === 'over' ? 'Over' : 'Under'} {selectedProp.line}
-                    </div>
-                    <div class="text-sm text-slate-400 mt-1">
-                        {selectedProp.game.awayTeam} @ {selectedProp.game.homeTeam}
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <div class="block text-sm font-semibold text-slate-300 mb-2">Sportsbook</div>
-                    <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 text-slate-100 font-medium">
-                        {selectedOdds.sportsbook}
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <div class="block text-sm font-semibold text-slate-300 mb-2">Odds</div>
-                    <div class="p-3 bg-slate-900 rounded-lg border border-slate-700 font-bold text-primary text-lg">
-                        {formatOdds(selectedSide === 'over' ? selectedOdds.overOdds : selectedOdds.underOdds)}
-                    </div>
-                </div>
-
-                <div class="mb-6">
-                    <label for="bet-amount" class="block text-sm font-semibold text-slate-300 mb-2">Bet Amount ($)</label>
-                    <input
-                        id="bet-amount"
-                        type="number"
-                        bind:value={betAmount}
-                        min="1"
-                        max={user?.balance || 0}
-                        class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-4 py-3 text-lg font-semibold focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                </div>
-
-                <div class="mb-6 p-4 bg-gradient-to-r from-success/10 to-success/5 rounded-lg border border-success/30">
-                    <div class="text-sm text-slate-400 mb-1">Potential Payout</div>
-                    <div class="text-2xl font-bold text-success">
-                        ${calculatePayout(betAmount, selectedSide === 'over' ? selectedOdds.overOdds : selectedOdds.underOdds).toFixed(2)}
-                    </div>
-                </div>
-
-                {#if errorMessage}
-                    <div class="mb-4 p-4 bg-danger/10 text-danger rounded-lg border border-danger/30">
-                        {errorMessage}
-                    </div>
-                {/if}
-
-                <div class="flex gap-3">
-                    <button
-                        on:click={placeBet}
-                        disabled={placing}
-                        class="flex-1 bg-gradient-to-r from-success to-success-dark text-white px-6 py-3 rounded-lg font-bold hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                    >
-                        {placing ? 'Placing...' : 'Place Bet'}
-                    </button>
-                    <button
-                        on:click={() => showBetSlip = false}
-                        class="flex-1 bg-slate-700 border border-slate-600 text-slate-100 px-6 py-3 rounded-lg font-semibold hover:bg-slate-600 transition-all"
-                    >
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    {/if}
-
-    <!-- Parlay Cart Sidebar -->
-    {#if showParlayCart}
-        <div class="fixed right-0 top-0 h-full w-96 bg-slate-900 border-l border-slate-700 shadow-2xl z-50 flex flex-col">
-            <!-- Header -->
-            <div class="bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
-                <div>
-                    <h3 class="text-xl font-bold text-slate-100">Parlay Builder</h3>
-                    {#if parlayCart.length > 0}
-                        <button
-                            on:click={() => {
-                                console.log('[PARLAY CART] Clearing all items');
-                                parlayCart = [];
-                            }}
-                            class="text-xs text-danger hover:text-danger-light font-semibold mt-1"
-                        >
-                            Clear All
-                        </button>
-                    {/if}
-                </div>
-                <button
-                    on:click={() => showParlayCart = false}
-                    class="text-slate-400 hover:text-slate-100 text-2xl font-bold"
-                >
-                    ×
-                </button>
-            </div>
-            <!-- Cart Items -->
-            <div class="flex-1 overflow-y-auto p-4 space-y-3">
-                {#if parlayCart.length === 0}
-                    <div class="text-center py-12 text-slate-400">
-                        <p class="mb-2">Your parlay cart is empty</p>
-                        <p class="text-sm">Add props from different games to build a parlay</p>
-                    </div>
-                {:else}
-                    {#each parlayCart as item, index}
-                        <div class="bg-slate-800 border border-slate-700 rounded-lg p-3">
-                            <div class="flex items-start justify-between mb-2">
-                                <div class="flex-1">
-                                    <div class="font-bold text-slate-100 text-sm">
-                                        {item.prop.playerName || item.prop.player?.name}
+                                                                <!-- Under Button -->
+                                                                {#if odds.underOdds !== null && odds.underOdds !== undefined}
+                                                                    <button
+                                                                        on:click={() => addToParlayCart(prop, 'under', odds)}
+                                                                        class="flex-1 text-center hover:bg-danger/20 border border-danger/30 hover:border-danger/50 rounded p-1 transition-all hover:scale-105"
+                                                                    >
+                                                                        <div class="text-xs text-slate-500 mb-1">U</div>
+                                                                        <div class="text-sm font-bold text-danger">
+                                                                            {formatOdds(odds.underOdds)}
+                                                                        </div>
+                                                                    </button>
+                                                                {:else}
+                                                                    <div class="flex-1 text-center bg-slate-700/30 border border-slate-600/30 rounded p-1">
+                                                                        <div class="text-xs text-slate-500 mb-1">U</div>
+                                                                        <div class="text-sm font-bold text-slate-500">N/A</div>
+                                                                    </div>
+                                                                {/if}
+                                                            </div>
+                                                        </div>
+                                                    {/each}
+                                                </div>
+                                            </div>
+                                        {/each}
                                     </div>
-                                    <div class="text-xs text-slate-400 mt-1">
-                                        {formatPropType(item.prop.propType)}
-                                        <span class="font-bold uppercase {item.side === 'over' ? 'text-success' : 'text-danger'}">
-                                            {item.side}
-                                        </span>
-                                        {item.prop.line}
-                                    </div>
-                                    <div class="text-xs text-slate-500 mt-1">
-                                        {item.prop.game?.awayTeam} @ {item.prop.game?.homeTeam}
-                                    </div>
-                                </div>
-                                <button
-                                    on:click={() => removeFromParlayCart(index)}
-                                    class="text-danger hover:text-danger-light font-bold text-lg ml-2"
-                                >
-                                    ×
-                                </button>
+                                {/if}
                             </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-slate-400">{item.odds.sportsbook}</span>
-                                <span class="font-bold text-primary">
-                                    {formatOdds(item.side === 'over' ? item.odds.overOdds : item.odds.underOdds)}
-                                </span>
-                            </div>
-                        </div>
-                    {/each}
-                {/if}
-            </div>
-
-            <!-- Parlay Summary & Place Bet -->
-            {#if parlayCart.length >= 2}
-                <div class="border-t border-slate-700 p-4 space-y-4">
-                    <div class="bg-slate-800 border border-slate-600 rounded-lg p-3">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm text-slate-400">Combined Odds</span>
-                            <span class="text-xl font-bold text-primary">{formatOdds(combinedOdds)}</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm text-slate-400">Legs</span>
-                            <span class="text-sm font-bold text-slate-100">{parlayCart.length}</span>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label for="parlay-amount" class="block text-sm font-semibold text-slate-300 mb-2">
-                            Bet Amount ($)
-                        </label>
-                        <input
-                            id="parlay-amount"
-                            type="number"
-                            bind:value={parlayAmount}
-                            min="1"
-                            max={user?.balance || 0}
-                            class="w-full bg-slate-800 border border-slate-600 text-slate-100 rounded-lg px-4 py-2 font-semibold"
-                        />
-                    </div>
-
-                    <div class="bg-gradient-to-r from-success/10 to-success/5 rounded-lg border border-success/30 p-3">
-                        <div class="text-xs text-slate-400 mb-1">Potential Payout</div>
-                        <div class="text-2xl font-bold text-success">
-                            ${parlayPayout.toFixed(2)}
-                        </div>
-                        <div class="text-xs text-slate-400 mt-1">
-                            Profit: ${(parlayPayout - parlayAmount).toFixed(2)}
-                        </div>
-                    </div>
-
-                    {#if parlayError}
-                        <div class="p-3 bg-danger/10 text-danger rounded-lg border border-danger/30 text-sm">
-                            {parlayError}
-                        </div>
+                        {/each}
                     {/if}
-
-                    <button
-                        on:click={placeParlay}
-                        disabled={placingParlay}
-                        class="w-full bg-gradient-to-r from-success to-success-dark text-white px-6 py-3 rounded-lg font-bold hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                    >
-                        {placingParlay ? 'Placing Parlay...' : 'Place Parlay Bet'}
-                    </button>
-                </div>
-            {:else if parlayCart.length === 1}
-                <div class="border-t border-slate-700 p-4">
-                    <div class="text-center text-slate-400 text-sm">
-                        Add at least one more prop from a different game to create a parlay
-                    </div>
                 </div>
             {/if}
         </div>
+    </div>
+</div>
+<!-- Always-Visible Bet Slip (Top Right Corner) -->
+<div class="fixed right-1 top-20 w-80 max-h-[90vh] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl flex flex-col z-40">
+    <!-- Header -->
+    <div class="bg-slate-800 border-b border-slate-700 px-4 py-3 rounded-t-xl">
+        <div class="flex items-center justify-between mb-1">
+            <h3 class="text-lg font-bold text-slate-100">Bet Slip</h3>
+            {#if parlayCart.length > 0}
+                <button
+                    on:click={() => {
+                        console.log('[BET SLIP] Clearing all items');
+                        parlayCart = [];
+                    }}
+                    class="text-xs text-danger hover:text-danger-light font-semibold"
+                >
+                    Clear
+                </button>
+            {/if}
+        </div>
+        {#if parlayCart.length === 0}
+            <p class="text-xs text-slate-400">Add props to get started</p>
+        {:else if parlayCart.length === 1}
+            <p class="text-xs text-slate-400">Single Bet</p>
+        {:else}
+            <p class="text-xs text-primary font-semibold">{parlayCart.length}-Leg Parlay</p>
+        {/if}
+    </div>
+
+    <!-- Bet Items -->
+    <div class="flex-1 overflow-y-auto p-3 space-y-2">
+        {#if parlayCart.length === 0}
+            <div class="text-center py-8 text-slate-400">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p class="text-xs">Click any odds to add</p>
+                <p class="text-xs mt-1 text-slate-500">2+ for parlay</p>
+            </div>
+        {:else}
+            {#each parlayCart as item, index}
+                <div class="bg-slate-800 border border-slate-700 rounded-lg p-2 hover:border-slate-600 transition-colors">
+                    <div class="flex items-start justify-between mb-1">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-slate-100 text-xs truncate">
+                                {item.prop.playerName || item.prop.player?.name}
+                            </div>
+                            <div class="text-xs text-slate-400 mt-0.5">
+                                {formatPropType(item.prop.propType)}
+                                <span class="font-bold uppercase {item.side === 'over' ? 'text-success' : 'text-danger'}">
+                                    {item.side}
+                                </span>
+                                {item.prop.line}
+                            </div>
+                            <div class="text-xs text-slate-500 mt-0.5 truncate">
+                                {item.prop.game?.awayTeam} @ {item.prop.game?.homeTeam}
+                            </div>
+                        </div>
+                        <button
+                            on:click={() => removeFromParlayCart(index)}
+                            class="text-slate-400 hover:text-danger font-bold ml-2 flex-shrink-0"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between text-xs pt-1.5 border-t border-slate-700">
+                        <span class="text-slate-400 text-xs truncate">{item.odds.sportsbook}</span>
+                        <span class="font-bold text-primary text-xs">
+                            {formatOdds(item.side === 'over' ? item.odds.overOdds : item.odds.underOdds)}
+                        </span>
+                    </div>
+                </div>
+            {/each}
+        {/if}
+    </div>
+
+    <!-- Bet Actions (Bottom) -->
+    {#if parlayCart.length > 0}
+        <div class="border-t border-slate-700 p-3 space-y-3 bg-slate-800 rounded-b-xl">
+            <!-- Parlay Summary (only show if 2+ legs) -->
+            {#if parlayCart.length >= 2}
+                <div class="bg-slate-900 border border-slate-600 rounded-lg p-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs text-slate-400">Combined Odds</span>
+                        <span class="text-lg font-bold text-primary">{formatOdds(combinedOdds)}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400">Legs</span>
+                        <span class="text-xs font-bold text-slate-100">{parlayCart.length}</span>
+                    </div>
+                </div>
+            {/if}
+
+            <!-- Bet Amount Input -->
+            <div>
+                <label for="bet-amount-slip" class="block text-xs font-semibold text-slate-300 mb-1">
+                    Bet Amount ($)
+                </label>
+                <input
+                    id="bet-amount-slip"
+                    type="number"
+                    bind:value={parlayAmount}
+                    min="1"
+                    max={user?.balance || 0}
+                    class="w-full bg-slate-900 border border-slate-600 text-slate-100 rounded-lg px-3 py-1.5 text-sm font-semibold focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                {#if user}
+                    <p class="text-xs text-slate-500 mt-1">Balance: {formatCurrency(user.balance)}</p>
+                {/if}
+            </div>
+
+            <!-- Payout Preview -->
+            <div class="bg-gradient-to-r from-success/10 to-success/5 rounded-lg border border-success/30 p-2">
+                <div class="text-xs text-slate-400 mb-0.5">Potential Payout</div>
+                {#if parlayCart.length === 1}
+                    {@const singleOdds = parlayCart[0].side === 'over' ? parlayCart[0].odds.overOdds : parlayCart[0].odds.underOdds}
+                    {@const payout = calculatePayout(parlayAmount, singleOdds)}
+                    <div class="text-xl font-bold text-success">
+                        {formatCurrency(payout)}
+                    </div>
+                    <div class="text-xs text-slate-400 mt-0.5">
+                        Profit: {formatCurrency((payout - parlayAmount))}
+                    </div>
+                {:else}
+                    <div class="text-xl font-bold text-success">
+                        {formatCurrency(parlayPayout)}
+                    </div>
+                    <div class="text-xs text-slate-400 mt-0.5">
+                        Profit: {formatCurrency((parlayPayout - parlayAmount))}
+                    </div>
+                {/if}
+            </div>
+
+            <!-- Error Message -->
+            {#if errorMessage || parlayError}
+                <div class="p-2 bg-danger/10 text-danger rounded-lg border border-danger/30 text-xs">
+                    {errorMessage || parlayError}
+                </div>
+            {/if}
+
+            <!-- Place Bet Button -->
+            <button
+                on:click={() => parlayCart.length === 1 ? placeSingleBet() : placeParlay()}
+                disabled={placing || placingParlay || !user}
+                class="w-full bg-gradient-to-r from-success to-success-dark text-white px-4 py-2.5 rounded-lg font-bold text-sm hover:shadow-glow-success transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+                {#if !user}
+                    Log In to Bet
+                {:else if placing || placingParlay}
+                    Placing...
+                {:else if parlayCart.length === 1}
+                    Place Bet
+                {:else}
+                    Place {parlayCart.length}-Leg Parlay
+                {/if}
+            </button>
+        </div>
     {/if}
+</div>

@@ -27,7 +27,7 @@
     }
 
     // Close dropdown when clicking outside
-    function handleClickOutside(event: MouseEvent) {
+    function handleClickOutside(event: MouseEvent) { 
         const target = event.target as HTMLElement;
         if (!target.closest('.user-menu')) {
             showUserMenu = false;
